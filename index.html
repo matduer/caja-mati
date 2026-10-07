@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0E7A5C">
 <meta name="color-scheme" content="light dark">
-<title>Caja Mati</title>
+<title>Caja</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -107,6 +107,12 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .dates button small{display:block;font-size:11px;opacity:.85}
 .sug{font-size:13px;background:var(--accent-soft);color:var(--fg);border-radius:8px;padding:6px 10px}
 .need{font-size:13px;background:var(--warn-soft);border-radius:8px;padding:6px 10px}
+.dsug{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:4px;background:var(--surface)}
+.dsug button{display:flex;justify-content:space-between;gap:8px;border:0;border-top:1px solid var(--line);border-radius:0;background:none;padding:10px 12px;text-align:left;color:var(--fg);font-size:15px}
+.dsug button:first-child{border-top:0}.dsug button small{color:var(--muted);font-family:var(--f-mono)}
+.tag{font-size:11px;background:var(--crit-soft);color:var(--crit);border-radius:99px;padding:1px 7px;font-weight:600}
+.warn-t{color:var(--warn);font-weight:600}
+.cat.sub .n{white-space:normal}.cat.sub .m{text-align:right}
 details.more{border-top:1px dashed var(--line);padding-top:10px}
 details.more summary{cursor:pointer;color:var(--accent);font-weight:500;font-size:14px}
 details.more[open] summary{margin-bottom:10px}
@@ -203,8 +209,18 @@ const LocalDB=(()=>{let idb;const mem=new Map(),pend=new Map(),subs=new Set();le
 const Sync={cfg:{url:"",key:"",last:0,err:""},busy:false,_t:null,
   async load(){const c=await LocalDB.meta("sync");if(c)this.cfg={...this.cfg,...c}},
   async save(){await LocalDB.meta("sync",this.cfg)},
-  start(){window.addEventListener("online",()=>{render(false);this.push()});window.addEventListener("offline",()=>render(false));
-    document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")this.push()});setInterval(()=>this.push(),60000);this.push()},
+  start(){window.addEventListener("online",()=>{render(false);this.all()});window.addEventListener("offline",()=>render(false));
+    document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")this.all()});setInterval(()=>this.all(),60000);this.all()},
+  // sincronización completa: sube lo pendiente y baja lo nuevo de la planilla (lo cargado en otro dispositivo)
+  async all(){await this.push();await this.pullQuiet()},
+  async pullQuiet(){if(this.pulling||!this.cfg.url||!navigator.onLine||this.busy)return;this.pulling=true;
+    try{const r=await fetch(this.cfg.url+(this.cfg.url.includes("?")?"&":"?")+"action=dump&key="+encodeURIComponent(this.cfg.key));const j=await r.json();if(!j.ok)throw new Error(j.error);
+      for(const d of j.docs){if(!d.path||!d.data)continue;const cur=LocalDB.raw(d.path);
+        if(cur&&JSON.stringify(cur)===JSON.stringify(d.data))continue;
+        if(cur&&(cur.actualizado||0)>(d.data.actualizado||0))continue;
+        await LocalDB.putRemote(d.path,d.data)}
+      ensureSubs();this.cfg.lastPull=Date.now();await this.save()}
+    catch(e){}finally{this.pulling=false}},
   soon(){clearTimeout(this._t);this._t=setTimeout(()=>this.push(),2500)},
   async push(manual){if(this.busy||!this.cfg.url)return;if(!navigator.onLine){if(manual)toast("Sin conexión: se sube cuando vuelva");return}
     const snap=LocalDB.pendingSnapshot();if(!snap.length){if(manual){this.cfg.last=Date.now();await this.save();toast("No hay nada pendiente")}return}
@@ -218,7 +234,8 @@ const Sync={cfg:{url:"",key:"",last:0,err:""},busy:false,_t:null,
     finally{this.busy=false;await this.save();render(false)}},
   async ping(){if(!navigator.onLine)return "Sin conexión: guardé los datos y pruebo cuando vuelva";
     try{const r=await fetch(this.cfg.url+(this.cfg.url.includes("?")?"&":"?")+"action=ping&key="+encodeURIComponent(this.cfg.key));const j=await r.json();
-      return j.ok?"Conectado con la planilla":(j.error==="clave"?"La clave no coincide con la del script":"Error: "+j.error)}catch(e){return "No pude conectar: revisá la dirección del script"}},
+      if(j.ok&&j.perfil){this.cfg.perfil=j.perfil;await this.save()}
+      return j.ok?"Conectado con la planilla"+(j.perfil?` como ${j.perfil}`:""):(j.error==="clave"?"La clave no coincide con la del script":"Error: "+j.error)}catch(e){return "No pude conectar: revisá la dirección del script"}},
   async pull(){if(!navigator.onLine){toast("Necesitás conexión para traer datos");return -1}
     try{const r=await fetch(this.cfg.url+(this.cfg.url.includes("?")?"&":"?")+"action=dump&key="+encodeURIComponent(this.cfg.key));const j=await r.json();if(!j.ok)throw new Error(j.error);
       let n=0;for(const d of j.docs){if(d.path&&d.data&&await LocalDB.putRemote(d.path,d.data))n++}ensureSubs();return n}
@@ -240,6 +257,7 @@ function vSync(){const c=Sync.cfg,n=LocalDB.pendingCount();
   <form class="card" id="fSync" autocomplete="off"><h3>Conexión con la planilla</h3>
    <label>Dirección del script (termina en /exec)<input id="sUrl" value="${esc(c.url)}" placeholder="https://script.google.com/macros/s/…/exec"></label>
    <label>Clave<input id="sKey" value="${esc(c.key)}" placeholder="la que está en el script"></label>
+   <p class="small muted" style="margin:0">Perfil: <b>${esc(YO())}</b>. Lo define la clave: cada uno tiene la suya y solo ve y sube lo propio.</p>
    <button type="submit">Guardar y probar</button></form>
   <div class="card"><h3>Traer datos de la planilla</h3><p class="small muted" style="margin:0">Sirve para un celu nuevo o si borraste los datos del navegador. Trae todo lo que está en la planilla; lo que cargaste acá y todavía no subiste no se toca.</p>
    ${S.confirmPull?`<div class="confirm">¿Traer los datos de la planilla a este celu?<div class="row"><button type="button" data-act="pullSi">Traer</button><button type="button" data-act="pullNo">No</button></div></div>`:`<button type="button" data-act="syncPull" ${!c.url?"disabled":""}>Traer datos de la planilla</button>`}</div>`}
@@ -317,7 +335,7 @@ const ico=(k,cls="ico")=>{const[e,c]=ICO[k]||["•","#7F8C8D"];return `<span cla
 // ================= estado =================
 const S={db:null,ready:false,tab:"inicio",stack:[],movs:{},subs:{},config:structuredClone(DEF_CONFIG),memo:[],hab:{items:[],saltados:[]},
   home:{tipo:"gasto",per:"mes",ref:hoyISO()},form:null,editing:null,calc:false,showAllRub:false,confirmArch:false,showArch:false,
-  tf:null,aj:null,ce:null,he:null,pickCuenta:false};
+  tf:null,aj:null,ce:null,he:null,se:null,subsDoc:null,descs:{},pickCuenta:false};
 const scr=()=>S.stack[S.stack.length-1]||{name:S.tab};
 function go(name,p={}){S.stack.push({name,...p});render(true);window.scrollTo(0,0)}
 function back(){S.stack.pop();S.confirmArch=false;S.pickCuenta=false;render(true);window.scrollTo(0,0)}
@@ -325,7 +343,8 @@ function suggest(desc){const k=norm(desc);if(!k)return null;
   const m=S.memo.find(x=>x[0]===k);if(m)return{rubro:m[1],persona:m[2],por:"lo que elegiste antes"};
   for(const r of REGLAS){if(r[0]==="CS"){if(r[1].test(desc))return{rubro:r[2],persona:null,por:"regla"};continue}
     if(r[0].test(desc))return{rubro:r[1],persona:r[2]||null,por:"regla"}}return null}
-const personaDef=r=>COMPARTIDO_DEF.has(r)?"Compartido":"Mati";
+const YO=()=>(Sync.cfg.perfil||"Mati");const OTRO=()=>YO()==="Mati"?"Cami":"Mati";const personas=()=>[YO(),OTRO(),"Compartido"];
+const personaDef=r=>COMPARTIDO_DEF.has(r)?"Compartido":YO();
 function cuentas(all){const c=S.config.cuentasV2||S.config.cuentas.map((n,i)=>({id:"c"+i,nombre:n,color:COLORES[i%COLORES.length],moneda:"ARS",incluir:true,saldoInicial:null,desde:null,archivada:false}));return all?c:c.filter(x=>!x.archivada)}
 const cuentaPorNombre=n=>cuentas(true).find(c=>c.nombre===n);
 const dotCta=c=>`<span class="dot" style="background:${c?c.color:"#7F8C8D"}" aria-hidden="true">${esc((c?c.nombre:"?").charAt(0).toUpperCase())}</span>`;
@@ -381,7 +400,7 @@ function proximos(){const hoy=hoyISO(),m=mesDe(hoy),d=+hoy.slice(8);const hechos
   return S.hab.items.filter(h=>h.activo&&h.dia>d&&!hechos.has(h.id)).sort((a,b)=>a.dia-b.dia)}
 function fechaHab(h){const m=mesDe(hoyISO());const ult=new Date(+m.slice(0,4),+m.slice(5),0).getDate();return `${m}-${pad(Math.min(h.dia,ult))}`}
 function movDesdeHab(h,monto){return{tipo:"gasto",fecha:fechaHab(h),mes:mesDe(hoyISO()),cuenta:h.cuenta,nota:"",origen:"app",archivado:false,moneda:"ARS",monto,
-  rubro:h.rubro,persona:h.persona||personaDef(h.rubro),grupo:RUBROS[h.rubro],reservado:false,desc:h.desc,compartida:null,habitual:h.id,creado:Date.now(),actualizado:Date.now()}}
+  rubro:h.rubro,persona:h.persona||personaDef(h.rubro),grupo:RUBROS[h.rubro],desc:h.desc,compartida:null,habitual:h.id,creado:Date.now(),actualizado:Date.now()}}
 
 // ================= vistas: Inicio =================
 function vInicio(){const h=S.home,r=rango(),xs=movsPeriodo(),sl=saldos();
@@ -390,10 +409,11 @@ function vInicio(){const h=S.home,r=rango(),xs=movsPeriodo(),sl=saldos();
   const ahorro=xs.filter(x=>x.tipo==="gasto"&&RUBROS[x.rubro]==="Ahorro").reduce((a,x)=>a+x.monto,0);
   const pend=pendientes();const loaded=periodoMeses().every(m=>S.movs[m]!==undefined);
   const futuro=r.hasta>addDias(hoyISO(),1)&&r.desde>hoyISO();
-  return `<header class="top"><h1>Caja Mati</h1>${syncChip()}</header>
+  return `<header class="top"><h1>Caja ${esc(YO())}</h1>${syncChip()}</header>
   ${!Sync.cfg.url?`<div class="need">Conectá tu planilla para traer tus cuentas y pagos habituales, y para que lo que cargues quede respaldado. <button type="button" class="ghost" data-go="sync">Configurar</button></div>`:Sync.alerta()?`<div class="need">${esc(Sync.alerta())} <button type="button" class="ghost" data-go="sync">Ver</button></div>`:""}
   <div class="balance"><span>Total en cuentas</span><b class="num">${esc(fmt(totalCuentas(sl)))}</b></div>
   ${pend.length?`<div class="pend"><b class="small">Pagos habituales para confirmar</b>${pend.slice(0,4).map(p=>`<div class="it"><span>${esc(p.desc)} · día ${p.dia} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.id}">Cargar</button><button type="button" data-hab-edit="${p.id}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.id}">Saltear</button></div>`).join("")}${pend.length>4?`<button type="button" class="ghost" data-go="habituales">Ver los ${pend.length}</button>`:""}</div>`:""}
+  ${cardProximos()}
   <div class="card" style="gap:10px">
    <div class="under">${[["gasto","Gastos"],["ingreso","Ingresos"]].map(([k,t])=>`<button type="button" data-htipo="${k}" aria-pressed="${h.tipo===k}">${t}</button>`).join("")}</div>
    <div class="periods">${[["dia","Día"],["semana","Semana"],["mes","Mes"],["anio","Año"]].map(([k,t])=>`<button type="button" data-per="${k}" aria-pressed="${h.per===k}">${t}</button>`).join("")}</div>
@@ -409,7 +429,7 @@ function movRow(x){
   if(x.tipo==="transferencia"){k="Transferencia";desc=`${x.desde} → ${x.hacia}`;meta=[x.nota||null];cls="neutral";mon=(cuentaPorNombre(x.desde)||{}).moneda||"ARS"}
   else if(x.tipo==="ajuste"){k="Ajuste de saldo";desc=`Ajuste ${x.cuenta}`;meta=[x.nota||null];cls="neutral";sign=x.monto>=0?"+":"−";monto=Math.abs(x.monto)}
   else if(x.tipo==="ingreso"){k=x.ingTipo;meta=[x.ingTipo==="Reintegro"?"reintegro de "+x.rubro:x.ingTipo,x.cuenta];sign=x.ingTipo==="Reintegro"?"−":"+";cls="ing"}
-  else{k=x.rubro;meta=[x.rubro,x.persona&&x.persona!=="Mati"?x.persona:null,x.cuenta,x.moneda==="USD"?"US$ "+x.montoOrig:null,x.compartida?"mi parte de "+fmt(x.compartida.total):null]}
+  else{k=x.rubro;meta=[x.rubro,x.persona&&x.persona!==YO()?x.persona:null,x.cuenta,x.moneda==="USD"?"US$ "+x.montoOrig:null,x.compartida?"mi parte de "+fmt(x.compartida.total):null]}
   if(x.archivado)meta.push("archivado");
   return `<button type="button" class="mov ${cls} ${x.archivado?"arch":""}" data-edit="${esc(x.mes)}|${esc(x.id)}">${ico(k)}<div class="d"><div>${esc(desc)}</div><div class="small muted">${meta.filter(Boolean).map(esc).join(" · ")}</div></div><div class="m">${sign}${esc(fmt(monto,mon))}</div></button>`}
 function listaPorDia(xs){const byDay={};xs.sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.creado||0)-(a.creado||0)).forEach(x=>(byDay[x.fecha]=byDay[x.fecha]||[]).push(x));
@@ -427,8 +447,8 @@ function vLista(p){const r=rango();let xs=periodoMeses().flatMap(movsDe).filter(
   ${p.cuenta||p.transf?"":`<button type="button" class="ghost" data-act="csv">Copiar como CSV</button>`}</div>`}
 
 // ================= Cargar =================
-function nuevoForm(){const c=cuentas()[0];return{tipo:"gasto",moneda:"ARS",monto:"",desc:"",rubro:null,persona:null,cuenta:c?c.nombre:"",fecha:hoyISO(),cuotas:1,reservado:false,compartida:false,total:"",ingTipo:"Sueldo",usd:"",tcGasto:"",nota:"",touchedRubro:false,touchedPersona:false,habitual:null}}
-function formDesdeMov(x){return{tipo:x.tipo,moneda:x.moneda||"ARS",monto:String(x.moneda==="USD"?x.montoOrig:(x.compartida?x.compartida.miParte:x.monto)),desc:x.reservado?"":x.desc,rubro:x.rubro||null,persona:x.persona||null,cuenta:x.cuenta,fecha:x.fecha,cuotas:1,reservado:!!x.reservado,compartida:!!x.compartida,total:x.compartida?String(x.compartida.total):"",ingTipo:x.ingTipo||"Sueldo",usd:x.usd?String(x.usd):"",tcGasto:x.tc?String(x.tc):"",nota:x.nota||"",touchedRubro:true,touchedPersona:true,habitual:x.habitual||null}}
+function nuevoForm(){const c=cuentas()[0];return{tipo:"gasto",moneda:"ARS",monto:"",desc:"",rubro:null,persona:null,cuenta:c?c.nombre:"",fecha:hoyISO(),cuotas:1,compartida:false,total:"",ingTipo:"Sueldo",usd:"",tcGasto:"",nota:"",touchedRubro:false,touchedPersona:false,habitual:null}}
+function formDesdeMov(x){return{tipo:x.tipo,moneda:x.moneda||"ARS",monto:String(x.moneda==="USD"?x.montoOrig:(x.compartida?x.compartida.miParte:x.monto)),desc:x.desc,rubro:x.rubro||null,persona:x.persona||null,cuenta:x.cuenta,fecha:x.fecha,cuotas:1,compartida:!!x.compartida,total:x.compartida?String(x.compartida.total):"",ingTipo:x.ingTipo||"Sueldo",usd:x.usd?String(x.usd):"",tcGasto:x.tc?String(x.tc):"",nota:x.nota||"",touchedRubro:true,touchedPersona:true,habitual:x.habitual||null}}
 function frecuentes(sel){const cnt={};todosMovs().forEach(x=>{if(x.tipo==="gasto"&&!x.archivado&&x.creado)cnt[x.rubro]=(cnt[x.rubro]||0)+1});
   let top=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);FRECUENTES_DEF.forEach(r=>{if(!top.includes(r))top.push(r)});top=top.filter(r=>RUBROS[r]).slice(0,7);
   if(sel&&!top.includes(sel))top=[sel,...top.slice(0,6)];return top}
@@ -455,13 +475,13 @@ function vCargar(){
    ${esGasto||f.ingTipo==="Reintegro"?`<div><label style="margin-bottom:6px">Rubro</label>
      ${sg?`<div class="sug" style="margin-bottom:8px">Sugerido por ${sg.por}: <b>${esc(sg.rubro)}</b>${sg.persona?" · "+esc(sg.persona):""}. Tocá otro si no es.</div>`:(!f.rubro&&f.desc?`<div class="need" style="margin-bottom:8px">No reconozco esta descripción: elegí el rubro.</div>`:"")}
      <div class="grid" role="group" aria-label="Rubro">${grid}</div></div>
-     <div class="seg" role="group" aria-label="De quién es">${PERSONAS.map(p=>`<button type="button" data-persona="${p}" aria-pressed="${f.persona===p}">${p}</button>`).join("")}</div>`:""}
+     <div class="seg" role="group" aria-label="De quién es">${personas().map(p=>`<button type="button" data-persona="${p}" aria-pressed="${f.persona===p}">${p}</button>`).join("")}</div>`:""}
    <div><label style="margin-bottom:6px">Fecha</label><div class="dates">${dts.map(([d,t])=>`<button type="button" data-fecha="${d}" aria-pressed="${f.fecha===d}">${fd(d)}<small>${t}</small></button>`).join("")}
     <button type="button" data-act="otraFecha" aria-pressed="${otra}">${otra?fd(f.fecha):"📅"}<small>${otra?"elegida":"otra"}</small></button></div>
     ${otra||S.otraFecha?`<input id="iFecha" type="date" value="${esc(f.fecha)}" style="margin-top:6px" aria-label="Otra fecha">`:""}</div>
    ${!esGasto&&f.ingTipo==="Sueldo"?`<label>USD vendidos<input id="iUsd" inputmode="decimal" placeholder="ej. 500" value="${esc(f.usd)}"></label><div class="hint">El monto de arriba son los pesos que recibiste.</div>`:""}
-   ${f.reservado?`<div class="sug">Gasto reservado: no se guarda la descripción, solo el monto y el rubro.</div>`:`<label>Comentario<input id="iDesc" placeholder="${esGasto?"ej. medialunas con Oppel":"ej. devolución de Juan"}" value="${esc(f.desc)}"></label>`}
-   ${esGasto?`<details class="more" ${f.cuotas>1||f.compartida||f.reservado||f.nota||f.moneda==="USD"?"open":""}><summary>Más opciones: cuotas, dólares, salida compartida, reservado</summary>
+   <div><label>Comentario<input id="iDesc" placeholder="${esGasto?"ej. medialunas con Oppel":"ej. devolución de Juan"}" value="${esc(f.desc)}" autocomplete="off"></label><div class="dsug" id="descSug" hidden></div></div>
+   ${esGasto?`<details class="more" ${f.cuotas>1||f.compartida||f.nota||f.moneda==="USD"?"open":""}><summary>Más opciones: cuotas, dólares, salida compartida</summary>
      <div style="display:flex;flex-direction:column;gap:12px">
      <div class="seg" role="group" aria-label="Moneda">${["ARS","USD"].map(m=>`<button type="button" data-moneda="${m}" aria-pressed="${f.moneda===m}">${m==="ARS"?"Pesos":"Dólares"}</button>`).join("")}</div>
      ${f.moneda==="USD"?`<label>Dólar usado (pesos por USD)<input id="iTc" inputmode="decimal" placeholder="${S.config.params.tc}" value="${esc(f.tcGasto)}"></label>`:""}
@@ -469,7 +489,6 @@ function vCargar(){
      ${f.cuotas>1?`<div class="hint">El monto es el total. Se carga una cuota por mes desde ${esc(nombreMes(mesDe(f.fecha)))}.</div>`:""}`}
      <label class="toggle"><input type="checkbox" id="iComp" ${f.compartida?"checked":""}>Salida compartida: pagué todo y me devuelven en el momento</label>
      ${f.compartida?`<label>Total que pagué<input id="iTotal" inputmode="decimal" value="${esc(f.total)}" placeholder="ej. 143.479"></label><div class="hint">Se cuenta solo tu parte. Si no te devuelven enseguida, cargá el total y después la devolución como ingreso.</div>`:""}
-     <label class="toggle"><input type="checkbox" id="iRes" ${f.reservado?"checked":""}>Gasto reservado (sin nombre)</label>
      <label>Nota<input id="iNota" value="${esc(f.nota)}" placeholder="opcional"></label></div></details>`:`<label>Nota<input id="iNota" value="${esc(f.nota)}" placeholder="opcional"></label>`}
    <button class="primary" type="submit" id="bGuardar">${ed?"Guardar cambios":"Añadir"}</button>
    ${ed?archBloque(ed):""}
@@ -491,23 +510,25 @@ async function guardar(){
   let docs=[],persona=null;
   if(esGasto){let pesos=n,extra={moneda:"ARS"};
     if(f.moneda==="USD"){const tc=parseMonto(f.tcGasto)||S.config.params.tc;pesos=Math.round(n*tc*100)/100;extra={moneda:"USD",montoOrig:n,tc}}
-    persona=f.persona||personaDef(f.rubro);const desc=f.reservado?"Gasto reservado":(f.desc.trim()||f.rubro);
-    Object.assign(base,extra,{rubro:f.rubro,persona,grupo:RUBROS[f.rubro],reservado:!!f.reservado,desc});
+    persona=f.persona||personaDef(f.rubro);const desc=f.desc.trim()||f.rubro;
+    Object.assign(base,extra,{rubro:f.rubro,persona,grupo:RUBROS[f.rubro],desc});
     if(f.compartida){const tot=evalMonto(f.total);if(!(tot>=n))return toast("El total pagado tiene que ser mayor o igual a tu parte.");base.compartida={total:tot,miParte:n}}else base.compartida=null;
     if(!S.editing&&f.cuotas>1){const k=f.cuotas,c=Math.round(pesos/k*100)/100,grupo="c"+uid();
       for(let i=0;i<k;i++){const m=addMes(base.mes,i);docs.push({...base,fecha:i===0?f.fecha:`${m}-01`,mes:m,monto:c,cuota:{n:i+1,de:k,total:pesos,grupo},desc:`${base.desc} (cuota ${i+1}/${k})`,nota:i===0?`Total ${fmt(pesos)} en ${k} cuotas${base.nota?" · "+base.nota:""}`:base.nota})}
     }else docs.push({...base,monto:pesos});
   }else{Object.assign(base,{moneda:"ARS",monto:n,ingTipo:f.ingTipo,desc:f.desc.trim()||f.ingTipo});
     if(f.ingTipo==="Sueldo"){const u=parseMonto(f.usd);base.usd=u>0?u:null;base.tc=u>0?Math.round(n/u*100)/100:null}
-    if(f.ingTipo==="Reintegro"){base.rubro=f.rubro;base.persona=f.persona||personaDef(f.rubro)}}
+    if(f.ingTipo==="Reintegro"){base.rubro=f.rubro;base.persona=f.persona||personaDef(f.rubro)}
+    docs.push(base)}
   const btn=$("#bGuardar");btn.disabled=true;
   try{
-    if(S.editing){const ed=S.editing;const nuevo={...ed,...docs[0]};delete nuevo.id;
+    if(S.editing){const ed=S.editing;const nuevo={...ed,...docs[0]};delete nuevo.id;delete nuevo.reservado;
       if(nuevo.mes!==ed.mes){await S.db.doc(`meses/${nuevo.mes}/movs/${ed.id}`).set(nuevo);await S.db.doc(`meses/${ed.mes}/movs/${ed.id}`).update({archivado:true,movidoA:nuevo.mes,actualizado:Date.now()})}
       else await S.db.doc(`meses/${ed.mes}/movs/${ed.id}`).set(nuevo);toast("Cambios guardados")}
     else{for(const d of docs){d.creado=Date.now();subMes(d.mes);await S.db.collection(`meses/${d.mes}/movs`).doc().set(d)}toast(docs.length>1?`Guardado en ${docs.length} cuotas`:"Guardado")}
   }catch(e){toast("No se guardó: "+(e.message||e.code));btn.disabled=false;return}
-  if(esGasto&&!f.reservado&&f.desc.trim()){const k=norm(f.desc);const S0=S.memo;S.memo=S0.filter(x=>x[0]!==k);const rs=suggest(f.desc);S.memo=S0;
+  if(f.desc.trim())aprenderDesc(f.desc);
+  if(esGasto&&f.desc.trim()){const k=norm(f.desc);const S0=S.memo;S.memo=S0.filter(x=>x[0]!==k);const rs=suggest(f.desc);S.memo=S0;
     if(!rs||rs.rubro!==f.rubro||(rs.persona&&rs.persona!==persona)){S.memo=[[k,f.rubro,persona],...S0.filter(x=>x[0]!==k)].slice(0,400);
       S.db.doc("config/memo").set({items:S.memo.map(x=>({k:x[0],r:x[1],p:x[2]}))}).catch(()=>{})}}
   S.editing=null;S.form=null;S.calc=false;S.showAllRub=false;S.otraFecha=false;back()}
@@ -558,8 +579,8 @@ function calcTopes(){const p=S.config.params,b=S.config.base;if(!b)return null;
   const ing=p.sueldoUsd*p.tc+p.cami,spy=p.spyUsd*p.tc*1.01,viaje=p.viajeUsd*p.tc,ahorro=ing*p.ahorroPct/100;
   const disc=ing-b.fijosNec-spy-viaje-ahorro;const d=Math.max(disc,0);const imprev=d*p.imprevPct/100,rep=d-imprev;
   const tot=DISC.reduce((s,k)=>s+(b.share[k]||0),0)||1;const rub={};
-  DISC.forEach(k=>{const mm=rep*(b.share[k]||0)/tot;const s=b.pers[k]||b.pers._total;rub[k]={Mati:mm*s.Mati,Compartido:mm*s.Compartido}});
-  const st=b.pers._total;rub["Imprevistos (Tecnología)"]={Mati:imprev*st.Mati,Compartido:imprev*st.Compartido};return{ing,spy,viaje,ahorro,disc,rub}}
+  DISC.forEach(k=>{const mm=rep*(b.share[k]||0)/tot;const s=b.pers[k]||b.pers._total;rub[k]={yo:mm*s[YO()],Compartido:mm*s.Compartido}});
+  const st=b.pers._total;rub["Imprevistos (Tecnología)"]={yo:imprev*st[YO()],Compartido:imprev*st.Compartido};return{ing,spy,viaje,ahorro,disc,rub}}
 function barra(g,t){const r=t>0?g/t:(g>0?2:0);const c=r>1?"crit":r>.8?"warn":"";return `<div class="bar" role="img" aria-label="${Math.round(r*100)}% del tope"><i class="${c}" style="width:${Math.min(r,1)*100}%"></i></div>`}
 function vTopes(){const T=calcTopes();if(!T)return `<header class="top"><h1>Topes</h1></header><div class="card state">Faltan los datos base de los topes.</div>`;
   const hoy=hoyISO(),lu=lunesISO(hoy),fin=addDias(lu,7),mes=mesDe(hoy);
@@ -567,17 +588,17 @@ function vTopes(){const T=calcTopes();if(!T)return `<header class="top"><h1>Tope
   const sem=g.filter(x=>x.fecha>=lu&&x.fecha<fin),mesX=movsDe(mes).filter(x=>!x.archivado&&x.tipo==="gasto");
   const key=r=>DISC.includes(r)?r:(r==="Tecnología"?"Imprevistos (Tecnología)":null);
   const sum=(xs,per)=>{const o={};xs.forEach(x=>{const k=key(x.rubro);if(k&&x.persona===per)o[k]=(o[k]||0)+x.monto});return o};
-  const sM=sum(sem,"Mati"),mM=sum(mesX,"Mati"),sC=sum(sem,"Compartido");const ks=Object.keys(T.rub);
-  const tS=ks.reduce((s,k)=>s+T.rub[k].Mati,0)/4.35,gS=ks.reduce((s,k)=>s+(sM[k]||0),0),tM=tS*4.35,gM=ks.reduce((s,k)=>s+(mM[k]||0),0);
+  const sM=sum(sem,YO()),mM=sum(mesX,YO()),sC=sum(sem,"Compartido");const ks=Object.keys(T.rub);
+  const tS=ks.reduce((s,k)=>s+T.rub[k].yo,0)/4.35,gS=ks.reduce((s,k)=>s+(sM[k]||0),0),tM=tS*4.35,gM=ks.reduce((s,k)=>s+(mM[k]||0),0);
   const cT=ks.reduce((s,k)=>s+T.rub[k].Compartido,0)/4.35,cG=ks.reduce((s,k)=>s+(sC[k]||0),0);
   const fila=(k,a,t)=>`<div class="trow"><div class="h"><span>${esc(k)}</span><span>${esc(fmt(a))} / ${esc(fmt(t))}</span></div>${barra(a,t)}</div>`;
   return `<header class="top"><h1>Topes</h1></header>
   <div class="card"><h3>Tu semana · ${esc(fCorta(lu))} al ${esc(fCorta(addDias(lu,6)))}</h3>
-   <div class="trow"><div class="h"><b>Discrecional Mati</b><span><b>${esc(fmt(gS))} / ${esc(fmt(tS))}</b></span></div>${barra(gS,tS)}<div class="small muted">${gS<=tS?`Te quedan ${esc(fmt(tS-gS))} esta semana.`:`Te pasaste ${esc(fmt(gS-tS))} esta semana.`}</div></div>
-   ${ks.filter(k=>T.rub[k].Mati>1).map(k=>fila(k,sM[k]||0,T.rub[k].Mati/4.35)).join("")}</div>
-  <div class="card"><h3>Compartido esta semana</h3>${fila("Lo compartido que cargás vos",cG,cT)}<p class="small muted" style="margin:0">Lo que paga Cami todavía no está en esta app.</p></div>
-  <div class="card"><h3>Tu mes · ${esc(nombreMes(mes))}</h3><div class="trow"><div class="h"><b>Discrecional Mati</b><span><b>${esc(fmt(gM))} / ${esc(fmt(tM))}</b></span></div>${barra(gM,tM)}</div>
-   ${ks.filter(k=>T.rub[k].Mati>1).map(k=>fila(k,mM[k]||0,T.rub[k].Mati)).join("")}</div>
+   <div class="trow"><div class="h"><b>Discrecional ${esc(YO())}</b><span><b>${esc(fmt(gS))} / ${esc(fmt(tS))}</b></span></div>${barra(gS,tS)}<div class="small muted">${gS<=tS?`Te quedan ${esc(fmt(tS-gS))} esta semana.`:`Te pasaste ${esc(fmt(gS-tS))} esta semana.`}</div></div>
+   ${ks.filter(k=>T.rub[k].yo>1).map(k=>fila(k,sM[k]||0,T.rub[k].yo/4.35)).join("")}</div>
+  <div class="card"><h3>Compartido esta semana</h3>${fila("Lo compartido que cargás vos",cG,cT)}<p class="small muted" style="margin:0">Lo compartido que carga ${OTRO()} no se ve en esta app.</p></div>
+  <div class="card"><h3>Tu mes · ${esc(nombreMes(mes))}</h3><div class="trow"><div class="h"><b>Discrecional ${esc(YO())}</b><span><b>${esc(fmt(gM))} / ${esc(fmt(tM))}</b></span></div>${barra(gM,tM)}</div>
+   ${ks.filter(k=>T.rub[k].yo>1).map(k=>fila(k,mM[k]||0,T.rub[k].yo)).join("")}</div>
   <div class="card"><h3>De dónde salen</h3><div class="tablewrap"><table>
    <tr><td>Ingresos estimados de la casa</td><td class="n">${esc(fmt(T.ing))}</td></tr><tr><td>Fijos + necesarios (prom. jul–sep 2026)</td><td class="n">−${esc(fmt(S.config.base.fijosNec))}</td></tr>
    <tr><td>SPY (USD ${S.config.params.spyUsd} + 1%)</td><td class="n">−${esc(fmt(T.spy))}</td></tr><tr><td>Fondo de viaje (USD ${S.config.params.viajeUsd} en total)</td><td class="n">−${esc(fmt(T.viaje))}</td></tr>
@@ -589,12 +610,13 @@ function vMas(){const pend=pendientes().length;
   return `<header class="top"><h1>Más</h1></header>
   <div class="card menu" style="padding-block:4px">
    <button type="button" data-go="sync"><span>Sincronización con la planilla</span><small>${esc(Sync.resumen())}</small></button>
+   <button type="button" data-go="subs"><span>Suscripciones</span><small>${(()=>{const n=subsItems().filter(s=>s.estado!=="cancelada"&&s.tipo!=="d").length,r=subsItems().filter(s=>s.estado==="revisar").length;return n+" activas"+(r?" · "+r+" para dar de baja":"")})()}</small></button>
    <button type="button" data-go="habituales"><span>Pagos habituales</span><small>${pend?pend+" para confirmar":S.hab.items.filter(h=>h.activo).length+" activos"}</small></button>
    <button type="button" data-go="ajustes"><span>Ajustes de los topes</span><small>sueldo, dólar, SPY, ahorro</small></button>
    <button type="button" data-go="lista" data-mesact="1"><span>Movimientos del mes y CSV</span><small>${esc(nombreMes(mesDe(hoyISO())))}</small></button>
   </div>
   <div class="card"><h3>Cómo se usa</h3><ul class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
-   <li>Los datos se guardan en este celu y funcionan sin internet. Cuando hay conexión se suben a tu planilla, y de ahí los lee Claude para el cierre.</li>
+   <li>Los datos se guardan en este dispositivo y funcionan sin internet. Con conexión, la app sube lo que cargaste y baja lo cargado en tus otros dispositivos (celu o compu), sola, cada vez que la abrís y cada minuto mientras está abierta.</li>
    <li>La Visa BBVA la concilia Claude con el resumen: no hace falta cargar cargos ni suscripciones en dólares que no anotaste.</li>
    <li>Nada se borra: lo que archivás deja de contar y se puede restaurar.</li>
    <li>En el monto podés escribir cuentas, por ejemplo 1500+2300.</li></ul></div>`}
@@ -625,12 +647,103 @@ function vAjustes(){const p=S.config.params;const campo=(id,t,v,st)=>`<label>${t
    ${campo("pImprev","Reserva imprevistos (% del discrecional)",p.imprevPct,5)}
    <button class="primary" type="submit">Guardar ajustes</button></form>`}
 
+// ================= sugerencias de descripción =================
+// Base: lo que cada uno escribió en la planilla (ago-2025 a sep-2026) + lo que se va cargando en la app (config/descs).
+const DESC_SEED={"Mati": [["Verdulería", 129], ["Supermercado", 101], ["Medialunas con Oppel", 62], ["פרחים", 31], ["Carnicería", 28], ["Maribel limpieza", 27], ["Fiambrería", 22], ["Terapia", 20], ["Helado", 20], ["Chocolate", 17], ["Claro", 16], ["Sube", 16], ["Facturas con el cosito", 15], ["Ley nro 25413 sobre crédito", 14], ["Impuesto ley 25413", 13], ["Alfajores", 13], ["Medicus", 13], ["AYSA", 13], ["Monotributo", 13], ["Edesur", 12], ["Café", 12], ["Metrogas", 11], ["ABL", 11], ["Iplan", 11], ["Comisión custodia", 10], ["Sanguchitos", 10], ["Fábrica de pastas", 9], ["Chipá", 9], ["Chipá con el cosito", 8], ["Shaolin", 8], ["Fondo vacaciones parte Mati", 7], ["Empanadas", 7], ["Alquiler", 6], ["Alfajor", 6], ["McDonald's", 6], ["Uber con el cosito", 6], ["Café con tostado", 6], ["Helado con el cosito", 6], ["Cena con los forros", 6], ["SPY", 6], ["Entrada torneo ajedrez", 5], ["Chipá y facturas con el cosito", 5], ["Sanguchitos con el cosito", 5], ["Farmacia", 5], ["Cami OSDE", 5], ["Fondo vacaciones parte Cami", 4], ["Libros premios torneo ajedrez", 4], ["Panadería", 4], ["Cena en lo de Ioni", 4], ["Uber", 4], ["Cena en lo de Oppel", 4], ["Papitas", 4], ["Merienda con el cosito", 4], ["Dietética", 4], ["Expensas", 3], ["Cabify", 3], ["Café con medialunas", 3], ["Cena con el cosito", 3], ["Granja", 3], ["Pedido hamburguesas y pizzetas cooperativa", 3], ["Chocolate con el cosito", 3], ["Lillos para el cosito", 3], ["Core", 3], ["פסתיס", 2], ["Panadería con el cosito", 2], ["Cabify con el cosito", 2], ["El Candil", 2], ["Lillos", 2], ["Medias", 2], ["Granola", 2], ["Bebida y papitas cumple Luna", 2], ["Filtros", 2], ["Sprite", 2], ["Shawarma", 2], ["Merienda con Franco", 2], ["Perfumería", 2], ["Propina despacho mochila en micro", 2], ["Almuerzo con el cosito", 2], ["Facturas", 2], ["Plástico pantalla para el celular", 2], ["Mantenimiento caja de seguridad (6 meses)", 2], ["Protector gástrico", 2], ["KFC", 2], ["Cena con Sofi", 2], ["Medialunas con el cosito", 2], ["Cena en lo de Fabi", 2], ["Cappuccino", 2], ["Pancho", 2], ["Pan relleno", 2], ["Chipá para lo de Lucas", 2], ["Fondo de viaje parte Mati", 2], ["Sanguche de milanesa", 2], ["Préstamo mudanza Ioni", 2], ["Chocolatada para Abi", 2], ["Bizcochitos con Lucas", 1], ["Expensas Agosto", 1], ["Rifas Marcos y Gurú", 1], ["Pedido comida Ceci", 1], ["Plumero", 1], ["Cena con Oppel e Ilu", 1], ["Gel rulos Mati", 1], ["Artículos bazar", 1], ["Easy (cosas varias bazar)", 1], ["Chipá y cosas saladas con el cosito", 1], ["Helado con los forros", 1], ["Libro poemas Omar", 1], ["Capuccino", 1], ["Tablero ajedrez cuerina enrollable", 1], ["Pan y facturas con el cosito", 1], ["Cena con Cata", 1], ["Rifas FIT", 1], ["Choripan", 1], ["Subte", 1], ["Proyector cuota 2/3", 1], ["Teatro con el cosito", 1], ["Guerrin con el cosito", 1], ["Masajes", 1], ["Prosciutto con el cosito", 1], ["Chipá y facturas con el cosito y Omar", 1], ["Hamburguesa", 1], ["Libro fascismo para Omar", 1], ["Comida en lo de Diego", 1], ["Porción torta", 1], ["Cable proyector", 1], ["Cena en lo de Lucio", 1], ["Disco sólido para la pc", 1], ["Facturas para lo de Ailu", 1], ["Entradas Fama y Guita", 1], ["Café con Juli", 1], ["Disfraz halloween", 1], ["Almuerzo de panadería con el cosito", 1], ["Arreglo compu Pampa y la Vía", 1], ["Panchos", 1], ["Sanguchitos y facturas con Igni y el cosito", 1], ["Pasajes al sur", 1], ["Cena con Emma", 1], ["Papitas y bebidas ranchada", 1], ["Fondo por internación Lore", 1], ["Filtros para Cami", 1], ["Posta de Achaval", 1], ["Cena Quostodio con el cosito", 1], ["Café 1/2 kilo", 1], ["Tierra de Nadie con el cosito", 1], ["Premios ajedrez", 1], ["Cena post ajedrez", 1], ["Lillos y fuegos", 1], ["Placa Bluetooth y wifi (USB)", 1], ["Medicamento contra dolor de panza", 1], ["Materiales instalación aire acondicionado", 1], ["Cena cumple Ioni", 1], ["Instalación aire acondicionado", 1], ["Rifa contribución Lore", 1], ["Papitas ranchada", 1], ["Regadera y dos palos de escoba", 1], ["Entradas Quasar", 1], ["Cena y show Juan", 1], ["Reloj y piezas Staunton", 1], ["Sanguchitos y facturas con el cosito y Dina", 1], ["Cena con Lunis", 1], ["Equipaje extra vuelo ida y vuelta", 1], ["Cena en casa", 1], ["פרחים (doble por error)", 1], ["פסתי", 1], ["Abanicos", 1], ["Abanico", 1], ["Snacks cumple Sofi", 1], ["Encendedores", 1], ["Combi al centro", 1], ["Sanguche, café y gaseosa con el cosito", 1], ["Tostado con el cosito", 1], ["Mamushka con el cosito", 1], ["Lotuschess", 1], ["Churros con el cosito", 1], ["Pasajes a San Martín de los Andes", 1], ["Pastelería", 1], ["Bondiola con el cosito", 1], ["Cabaña Bariloche", 1], ["Adaptador enchufe tres patitas rectas", 1], ["Crema herpes", 1], ["Helado y chocolate en rama con el cosito", 1], ["Chocolate caliente con el cosito", 1], ["Capuccino y cubanito", 1], ["Café con brownie", 1], ["Entradas museo paleontología con el cosito", 1], ["Café con leche", 1], ["Sanguche carne y papas", 1], ["Empanadas con el cosito", 1], ["Entrada playa la islita", 1], ["Al Rayan con el cosito", 1], ["Café con el cosito", 1], ["Micro a aeropuerto", 1], ["Chocolate regalos familia", 1], ["Teclados y joystick", 1], ["ABL (15057,99 impuesto inmobiliario)", 1], ["Cena mi cumple", 1], ["Seña arreglo mochila (falta pagar $14000)", 1], ["Pava eléctrica y sandwichera", 1], ["Parte restante alquiler", 1], ["Cartuchera", 1], ["Fuego", 1], ["Kentucky con Ioni y Vicky", 1], ["Propina helado juntada", 1], ["Resto del arreglo de la mochila", 1], ["Papitas con los forros", 1], ["Chipá para lo de Laurel", 1], ["Co Pain con el cosito", 1], ["Cena en lo de Lucas", 1], ["Tacho de basura", 1], ["Funda impermeable celular", 1], ["Brazalete celular", 1], ["Estuche anteojos", 1], ["Gomitas de pelo", 1], ["Saigon con el cosito", 1], ["Helado en lo de Lucas", 1], ["Empanadas con Franco", 1], ["Lavadero frazada azul", 1], ["Aire acondicionado cuota 2 de 6", 1], ["Huevos para cena en lo de Cata", 1], ["Helado con Cata", 1], ["Facturas y sanguchitos con Oppel", 1], ["Empanadas con Emma y Lara", 1], ["Cine Gaumont", 1], ["Cena con Oppel", 1], ["Café con torta", 1], ["Peli con Emma e Ilu", 1], ["Pancho con Emma e Ilu", 1], ["Propina cena cumple Vivi", 1], ["Cena con Billy y Ioni", 1], ["Regalo Lara", 1], ["Regalo ajedrez Abi", 1], ["Nempla tango a la gorra", 1], ["Cena con Aguch y Pancho", 1], ["Capuccino y tostado", 1], ["Uber cancelado", 1], ["Torta cumple Aguch", 1], ["Mostaza con Emma y Lara", 1], ["Sprite en Orgullo", 1], ["Chipá y sanguchitos", 1], ["Sanguche vegano", 1], ["El Barrilete", 1], ["Cena con Franco", 1], ["Snacks cumple Franco", 1], ["Consulta medica Reprocann", 1], ["Merienda con Emma", 1], ["Sanguchitos y facturas con el cosito", 1], ["Entradas teatro con el cosito", 1], ["Cena post teatro con el cosito", 1], ["Uber para Cami", 1], ["Pizza cumple Lucio", 1], ["Entradas Metrópolis con el cosito", 1], ["Chocolate ranchada Lucas", 1], ["Asado en lo de Lucio", 1], ["Entrada Molle", 1], ["Chipá y chocotorta", 1], ["Facturas con Emma, Ale y Feli", 1], ["Aire acondicionado cuota 5 de 6", 1], ["Churros", 1], ["Almuerzo en Otero", 1], ["ABL (marzo y abril)", 1], ["Hielo cumple Ilu", 1], ["McDonald's con el cosito", 1], ["Botones abrigo", 1], ["Pincel para limpiar compu", 1], ["Huevo de pascua Camilo", 1], ["Comida árabe con el cosito", 1], ["Alquiler resto (monto total $932,000)", 1], ["Lillos y filtros", 1], ["Farmacia y perfumería", 1], ["Hamburguesas con Aguch y el cosito", 1], ["El Candil con Rulo, Hana y el cosito", 1], ["Facturas con Rulo, Jana y el cosito", 1], ["Papitas y bebida cumple Nati", 1], ["Subway", 1], ["Fluticasona Mati", 1], ["Cena con Franco y Gianfranco", 1], ["Dexlansoprazol y tensium gastric Mati", 1], ["Chipa y medialunas reunión ajedrez", 1], ["Pedido cremas de Córdoba", 1], ["Kit armado", 1], ["Cabify con Oppel", 1], ["Uber con Oppel", 1], ["HBO Max (un año)", 1], ["Impresiones flyers encuentro Globalismo", 1], ["Chipá y medialunas con el cosito", 1], ["Fuegos", 1], ["Zapatilla 5 metros", 1], ["Cena en lo de Sofi", 1], ["Taxi", 1], ["Burger King", 1], ["Boxers y medias (3 cuotas)", 1], ["Plafón", 1], ["Red gatera", 1], ["Arroz entrada torneo ajedrez", 1], ["Pan y sanguche de milanesa con el cosito", 1], ["Birras por premio ajedrez Emma", 1], ["Snacks juntada Ernesto", 1], ["Chocolate con Abi", 1], ["El Candil juntada Ernesto", 1], ["Auriculares", 1], ["Cena en lo de Cata", 1], ["Plantitas regalo cosito", 1], ["Snacks juntada Cata", 1], ["Entradas cine Abi", 1], ["Verdura para sopa Camilito", 1], ["Papitas casa Diego", 1], ["Cena en lo de Diego", 1], ["Cena en lo de Franco", 1], ["Bondiola", 1], ["Sanguchitos y milanesa con el cosito", 1], ["McDonald's con Igni", 1], ["Inscripción torneo ajedrez", 1], ["Snacks asado Lucio", 1], ["Chocolate caliente", 1], ["Lechuga para asado Lucio", 1], ["3 entradas Deseo", 1], ["Asado en lo de Lucio con el cosito", 1], ["Mural ajedrez (préstamo a Emma)", 1], ["Guerrin con Oppel e Ilu", 1], ["Carilinas", 1], ["Entrada techno Oppel", 1], ["Crocs", 1], ["Chipá y sanguchitos con el cosito", 1], ["Papitas con el cosito", 1], ["Chipá y facturas para lo de Lucas", 1], ["Verduras para lo de Cata", 1], ["Café y tostado cefyl", 1], ["Moledora de pimienta", 1], ["Libro premio ajedrez", 1], ["Toner", 1], ["Birra y snacks para lo de Cata", 1], ["Entrada Quasar", 1], ["Chipá para lo de Chaco", 1], ["Café y alfajor", 1], ["Cena con gente ajedrez", 1], ["Cena en lo de Chaco", 1], ["Café con Sofi", 1], ["Entrada Pascual torneo ajedrez", 1], ["Regalo Cata", 1], ["Postres cumple Cata", 1], ["Submarino y medialunas con Emma", 1], ["Pizza en lo de Ioni", 1], ["El Candil con Franco y el cosito", 1], ["Merienda con Fede", 1], ["Fuego y alfajores", 1], ["Show Fruto Extraño", 1], ["Cena ajedrez", 1], ["Empanadas de osobuco de Ioni con el cosito", 1], ["Chicitos y chocolate", 1], ["Panadería con Ioni y Camilo", 1], ["Shawarma con Oppel", 1], ["Reserva cancha fútbol", 1]], "Cami": [["Sube", 22], ["Psy", 15], ["Celular", 15], ["Alquiler", 12], ["Psico", 9], ["Tab", 8], ["Tab+liy", 8], ["Perfumería", 8], ["Verdulería", 6], ["Pilates", 5], ["Osde", 5], ["Peluquería", 4], ["Dietética", 4], ["Fiambrería", 4], ["Ostéopathe", 3], ["Liyos", 3], ["Psicólogo", 3], ["Shampoo", 2], ["Osteo", 2], ["Fluticasona", 2], ["Feria americana", 2], ["Feria cáritas", 2], ["Feria", 2], ["Heladito", 2], ["Café pilates", 2], ["Bazar chino cosmética", 2], ["Bazar", 2], ["Propina café", 2], ["Cuota femma", 2], ["Merienda amigues", 2], ["Pedido hamburguesas", 2], ["Churros y chipa", 2], ["Agua", 2], ["Cuota gim", 2], ["Uber cena amigas", 2], ["Flora", 2], ["Café post laburo", 1], ["Glutamina", 1], ["Tuenti", 1], ["Videocolsulta", 1], ["Pomada para cuero", 1], ["Café+agua", 1], ["Tab liyos", 1], ["Perfume", 1], ["Cumple Dina Carrefour", 1], ["Filtros", 1], ["Agua Fatboy slim", 1], ["Pedido hamburguesas y pizzetas", 1], ["Liyo", 1], ["Sub", 1], ["Día", 1], ["Propina merienda jornadas", 1], ["Pantalón ver", 1], ["Service compu + cargador", 1], ["Cafe con Mati", 1], ["Taxi PC service", 1], ["Papitas jvg", 1], ["Reserva cabaña", 1], ["Taxi cumple Homer", 1], ["Osteopata", 1], ["Psyco", 1], ["Seña turno ginecología", 1], ["Desayuno situada", 1], ["Birra marcha", 1], ["Comida marcha", 1], ["Tab y liy", 1], ["Gine", 1], ["Óvulos", 1], ["Hamburguesas y pizzetas", 1], ["Pizza noche de los museos", 1], ["Heladito con Vicu", 1], ["Empanadas jvg", 1], ["Kiosko jvg", 1], ["Stickers", 1], ["Aguita", 1], ["Brunch post AF", 1], ["Reglaos cumples seba y yani", 1], ["Teatro taller de montaje", 1], ["Pizza AF", 1], ["Seña cabaña bari 2", 1], ["Birra papitas nachos", 1], ["Entrada muestra Pato", 1], ["Birra", 1], ["Coto con Laurel", 1], ["50 porciento seña SMA CABAÑA", 1], ["Booklover fest", 1], ["Hamburguesas Ceci", 1], ["Entradas Dillom", 1], ["Bebidas stickers dillom", 1], ["Propina moza", 1], ["Cabaña 1", 1], ["Taxi aeropuerto", 1], ["Llave copia", 1], ["Excursión puerto blest", 1], ["Uber colonia suiza", 1], ["Almuerzo villa Traful", 1], ["Cabaña Traful", 1], ["Propina bus", 1], ["Supermercado", 1], ["Cafes puerto blest", 1], ["Extras excursion Puerto Blest", 1], ["Bondi Bariloche", 1], ["Cabaña SMA", 1], ["Taza térmica", 1], ["Ingreso bandurrias", 1], ["Cena cheta", 1], ["Propina almuerzo último día", 1], ["Pepsi", 1], ["Enero gimnasio", 1], ["Cena con Marce", 1], ["Ostéopathie", 1], ["Almuerzo con Mati JVG", 1], ["Cine+birra+comida peruana", 1], ["Sartensota", 1], ["Comic batman", 1], ["Pan", 1], ["Uber collagr", 1], ["Chino collage", 1], ["Cine + bodegón", 1], ["Coto juntadita laurel", 1], ["Bermudas", 1], ["Zapatillas", 1], ["Heladito puerto madero", 1], ["Hecho en Buenos Aires", 1], ["Chino cumple Viky", 1], ["Pantalones", 1], ["Mc Laren + birra + uber", 1], ["Shampoos", 1], ["Regalos mamá", 1], ["Antihistamínico", 1], ["Entradas konex marce", 1], ["Cena en lo de Vicu", 1], ["Café preexamen", 1], ["Repasador", 1], ["Sprite", 1], ["Escabio konex", 1], ["Supermercado cumple Agus", 1], ["Análisis de sangre", 1], ["Pelota Agus + pelota nuestra", 1], ["Merienda peluquería", 1], ["Uber ache", 1], ["Birras gurú", 1], ["Gimnasio", 1], ["Extra tuenti", 1], ["Merienda con Leila", 1], ["Cumple con papá y", 1], ["Entrada + uber fama y guira", 1], ["Drenaje linfático", 1], ["Propina Hasta Trilce", 1], ["Medias de descanso", 1], ["Churros merienda", 1], ["Pan masa madre", 1], ["Ropa+tintura+stickers", 1], ["Perfumería cofia", 1], ["Laurel", 1], ["Agua y liyos kiosko", 1], ["El topo cumple Laurel", 1], ["Cargador compu", 1], ["Regalo baby shower", 1], ["Chino", 1], ["Barcito chileno", 1], ["Cafe propina", 1], ["Cuadernos y lapicera", 1], ["Calzas", 1], ["Medias", 1], ["Regalo Camila + pavadas perfumería", 1], ["Facturas estudiar", 1], ["Taxi post operación", 1], ["Pantalón feria", 1], ["Medialunas mantequeria", 1], ["Filtros cartón", 1], ["Taxi sobrino", 1], ["Taxi molle", 1], ["Puchos+alfajores", 1], ["Carga sube", 1], ["Cena con Agus la Boca", 1], ["Perfilador", 1], ["Café post alianza", 1], ["Comida barrio chino", 1], ["Tortilla feria", 1], ["Gorrito", 1], ["Churro", 1], ["Cuadernito", 1], ["Torta jvg", 1], ["Birra con Seba", 1], ["Panadería almuerzo chez Camille", 1], ["Entreda chebrolet y birra", 1], ["Vestido + 2 remeras", 1], ["Organizador", 1], ["Propina merienda Mati", 1], ["Facturas con Laurle", 1], ["Dona", 1], ["Chia y quinoa pop", 1], ["Envío pedido cremas", 1], ["Helado", 1], ["Pizza con Margarita", 1], ["Subte", 1], ["Perfiladores y broche vestido", 1], ["Stickers y liquid", 1], ["Panadería estudio", 1], ["Regalos Dani y Oruga", 1], ["Dia juntada", 1], ["Rotisería pescadería", 1], ["Caramelos", 1], ["Colaboración", 1], ["Cartuchera y cosas varias", 1], ["Anteojos", 1], ["Bondo", 1], ["Birra y papitas con Leandro", 1], ["Café turno ostéopathe", 1], ["Cambio patillas lentes", 1], ["Birra y morfi villa lynch", 1], ["Bazar+medias+botella", 1], ["Tintorería tapado", 1], ["Medias+tintura+jabón", 1], ["Remera", 1], ["Taxi+agua+guardarropas", 1], ["Honguito de invierno", 1], ["Shampoo y acondicionador", 1], ["Resma y lapicera", 1], ["Birra inauguración", 1], ["Facturas con Vicu", 1], ["Comida feria sabe la tierra", 1], ["Hamburguesa y trago con Dina", 1], ["Cremas dermatóloga", 1], ["Regalos día del padre", 1], ["Hamburguesas", 1], ["Espuma+flora+glutamina", 1], ["Libro Van Gogh", 1], ["Café con medialunas", 1], ["Jabón intimo", 1], ["Donación", 1], ["Tsb", 1], ["Comida+agua+birra+propina", 1], ["Cubierta y plástico celu", 1], ["Alquiler y expensas", 1], ["entradas molle hiedrah", 1], ["Teléfono", 1], ["Maquina láser", 1], ["Cena con amigas", 1], ["Chipá y cremona", 1], ["panes masamadre", 1], ["Vestido verde", 1], ["Óvulos ácido lactico", 1], ["Papas birra festejo Marcos doctor", 1], ["Snacks partido", 1], ["Cuota osde", 1], ["Propina resto", 1], ["Balita", 1], ["Remera portsaid", 1], ["Arreglo borcegos", 1], ["Tabaco", 1], ["Pizza", 1], ["Mantenimiento caja de seguridad", 1], ["Teatro con Agus", 1], ["Kinesiologo", 1], ["Farmacity", 1], ["Gel estrógenos", 1], ["Cejas", 1], ["Cancan", 1], ["Cena y birras con Agus", 1], ["Tab+liy+filt", 1], ["Panes y queso", 1], ["Muffin feria", 1], ["Corpiños", 1], ["Tinturas", 1], ["Panadería Seba y Yani", 1], ["Tab y celulosas", 1], ["Mousses y muffins", 1], ["Rotisería", 1], ["Uber+birra+cena gurú", 1], ["Donación bomberos voluntarios", 1], ["Comida calle caminito", 1], ["Yerba", 1], ["Tinturas madres", 1], ["Cafe psicólogo", 1], ["Flan", 1], ["Tab+liyos", 1], ["Cartulinas tinta pizarrón y cosas varias", 1], ["Colaboración escuela", 1], ["Depilación cejas", 1], ["Mtc oil", 1], ["Entrenamiento rehabilitación", 1], ["Maquillaje", 1], ["Bebida cumple Seba", 1], ["Entrada show Pato", 1], ["Entradas teatro san Martin", 1], ["Facturas con amigas", 1], ["Merienda cumple Dina", 1], ["Propina café papá", 1], ["Vermuth con Dámaris", 1], ["Brunch con Mati", 1], ["Perfumería y pañuelitos", 1], ["Masilla de madera", 1], ["Dietética y pan", 1], ["Farmacia catito", 1], ["Dia compra", 1]]};
+const _YO=()=>typeof YO==="function"?YO():"Mati";
+function descCands(){const o=new Map();
+  (DESC_SEED[_YO()]||[]).forEach(([d,n])=>{const k=norm(d);o.set(k,{d,n,t:0})});
+  Object.entries(S.descs||{}).forEach(([k,v])=>{const x=o.get(k);if(x){x.n+=v.n;x.t=v.t||0;if(v.d)x.d=v.d}else o.set(k,{d:v.d,n:v.n,t:v.t||0})});
+  return [...o.entries()]}
+function descSug(q){const k=norm(q);if(k.length<2)return[];const ws=k.split(" ");
+  return descCands().filter(([c])=>c!==k&&ws.every(w=>c.includes(w)))
+    .sort((a,b)=>b[1].n-a[1].n||b[1].t-a[1].t||(a[0].startsWith(k)?-1:0)||a[0].length-b[0].length).slice(0,6).map(([,v])=>v)}
+function paintSug(){const box=document.getElementById("descSug"),i=document.getElementById("iDesc");if(!box||!i)return;
+  const xs=document.activeElement===i?descSug(i.value):[];
+  box.hidden=!xs.length;box.innerHTML=xs.map(x=>`<button type="button" data-dsug="${esc(x.d)}"><span>${esc(x.d)}</span><small>${x.n}×</small></button>`).join("")}
+function aprenderDesc(desc){const d=String(desc||"").trim();if(!d)return;const k=norm(d);S.descs=S.descs||{};
+  const x=S.descs[k]||{d,n:0,t:0};x.d=d;x.n+=1;x.t=Date.now();S.descs[k]=x;
+  S.db.doc("config/descs").set({items:S.descs}).catch(()=>{})}
+
+// ================= suscripciones y débitos automáticos =================
+// Armado por Claude con los resúmenes Visa BBVA (dic-2024 a ago-2026), el ajuste del resumen con cierre 1/10/2026 y lo anotado en sep-2026.
+const SUBS_SEED=[{"id": "yt", "tipo": "s", "servicio": "YouTube Premium", "tarjeta": "GOOGLE *YouTubePremium (antes GOOGLE *YouTubeP …)", "frec": "mensual", "monto": 6.88, "moneda": "USD", "ultimo": "2026-09-03", "medio": "Visa BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "youtube", "nota": "Subió: $1.899 hasta mar-25, USD 2,6–2,9 en 2025, USD 4,7–4,97 desde nov-25 y USD 6,99 en ago-26. Antes se cobraba el 30; desde oct-25, el 3.", "estado": "activa"}, {"id": "claude", "tipo": "s", "servicio": "Claude (Anthropic)", "tarjeta": "— (en el resumen con cierre 1/10, que no está en la carpeta)", "frec": "mensual", "monto": 80.71, "moneda": "USD", "ultimo": "2026-09-21", "medio": "Visa BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "claude|anthropic", "nota": "En septiembre hubo dos cobros: $30.303 el 19/9 (cuenta BBVA) y USD 80,71 el 21/9 (Visa). El próximo monto puede ser distinto.", "estado": "activa"}, {"id": "chati", "tipo": "s", "servicio": "ChatiApp", "tarjeta": "— (pagado desde la cuenta BBVA, no aparece en la Visa)", "frec": "mensual", "monto": 100757.58, "moneda": "ARS", "ultimo": "2026-09-19", "medio": "BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "chati", "nota": "Primer cobro registrado en sep-26. Confirmá qué servicio es y si es mensual.", "estado": "activa"}, {"id": "canva", "tipo": "s", "servicio": "Canva Pro", "tarjeta": "CANVA", "frec": "mensual", "monto": 10285, "moneda": "ARS", "ultimo": "2026-09-06", "medio": "Visa BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "canva", "nota": "En la Visa figura el 19/5 y el 6/8; en junio y julio no aparece. El 6/9 lo anotaste en la app.", "estado": "activa"}, {"id": "hbo", "tipo": "s", "servicio": "HBO Max (plan anual)", "tarjeta": "help hbomax com (antes DLO*help hbomax com)", "frec": "anual", "monto": 97392.9, "moneda": "ARS", "ultimo": "2026-08-17", "medio": "Visa BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "hbo", "nota": "Ago-25: $74.160,90. Ago-26: $97.392,90 (+31%).", "estado": "activa"}, {"id": "lotus", "tipo": "s", "servicio": "Lotus Chess (Google Play)", "tarjeta": "GOOGLE *Lotus Ch", "frec": "anual", "monto": 19.99, "moneda": "USD", "ultimo": "2025-12-27", "medio": "Visa BBVA", "rubro": "Ajedrez", "persona": "Mati", "match": "lotus", "nota": "Un solo cobro en los resúmenes: supongo que es anual.", "estado": "activa"}, {"id": "chesscom", "tipo": "s", "servicio": "Chess.com", "tarjeta": "Chess.com Chess.com", "frec": "anual", "monto": 21.56, "moneda": "USD", "ultimo": "2025-11-15", "medio": "Visa BBVA", "rubro": "Ajedrez", "persona": "Mati", "match": "chess\\.com", "nota": "Un solo cobro en los resúmenes: supongo que es anual.", "estado": "activa"}, {"id": "x", "tipo": "s", "servicio": "X Premium", "tarjeta": "X CORP. PAID FEATURES", "frec": "anual", "monto": 20, "moneda": "USD", "ultimo": "2026-02-26", "medio": "Visa BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "x corp|x premium|twitter", "nota": "Un solo cobro. Si era mensual, ya no se renueva; si es anual, vuelve en feb-27.", "estado": "activa"}, {"id": "medicus", "tipo": "d", "servicio": "Medicus (prepaga)", "tarjeta": "MEDICUS SA DEB A", "frec": "mensual", "monto": 264453.14, "moneda": "ARS", "ultimo": "2026-09-24", "medio": "Visa BBVA", "rubro": "Prepaga", "persona": "Mati", "match": "medicus", "nota": "Se debita entre el 19 y el 25.", "estado": "activa"}, {"id": "osde", "tipo": "d", "servicio": "OSDE (prepaga de Cami)", "tarjeta": "OSDE", "frec": "mensual", "monto": 219117, "moneda": "ARS", "ultimo": "2026-09-02", "medio": "Visa BBVA", "rubro": "Prepaga", "persona": "Cami", "match": "osde", "nota": "La paga Cami (te transfiere). Se debita entre el 2 y el 6.", "estado": "activa"}, {"id": "claro", "tipo": "d", "servicio": "Claro (celular)", "tarjeta": "CLARO DEB AUT (antes CP*FACTURAS CLARO)", "frec": "mensual", "monto": 15862, "moneda": "ARS", "ultimo": "2026-09-18", "medio": "Visa BBVA", "rubro": "Celular", "persona": "Mati", "match": "claro", "nota": "Se debita entre el 15 y el 19.", "estado": "activa"}, {"id": "iplan", "tipo": "d", "servicio": "Iplan (internet)", "tarjeta": "MERPAGO*IPLAN (antes IPLAN NETWORKS)", "frec": "mensual", "monto": 55196.69, "moneda": "ARS", "ultimo": "2026-09-15", "medio": "Visa BBVA", "rubro": "Servicios", "persona": "Compartido", "match": "iplan", "nota": "Se debita entre el 15 y el 19.", "estado": "activa"}, {"id": "edesur", "tipo": "d", "servicio": "Edesur (luz)", "tarjeta": "EDESUR DEB AUT", "frec": "mensual", "monto": 20646.78, "moneda": "ARS", "ultimo": "2026-09-14", "medio": "Visa BBVA", "rubro": "Servicios", "persona": "Compartido", "match": "edesur", "nota": "Se debita entre el 12 y el 20.", "estado": "activa"}, {"id": "aysa", "tipo": "d", "servicio": "AySA (agua)", "tarjeta": "AGUA Y SANEAMIEN", "frec": "mensual", "monto": 42007.58, "moneda": "ARS", "ultimo": "2026-09-07", "medio": "Visa BBVA", "rubro": "Servicios", "persona": "Compartido", "match": "aysa|agua y saneam", "nota": "Se debita entre el 6 y el 13.", "estado": "activa"}, {"id": "abl", "tipo": "d", "servicio": "ABL", "tarjeta": "ABL 2383793 … (antes INMOBILIARIO /ABL)", "frec": "mensual", "monto": 33776.11, "moneda": "ARS", "ultimo": "2026-09-02", "medio": "Visa BBVA", "rubro": "Servicios", "persona": "Compartido", "match": "\\babl\\b", "nota": "Se debita entre el 2 y el 10.", "estado": "activa"}, {"id": "metrogas", "tipo": "d", "servicio": "Metrogas (gas)", "tarjeta": "METROGAS SA DEB", "frec": "mensual", "monto": 8948.93, "moneda": "ARS", "ultimo": "2026-09-02", "medio": "Visa BBVA", "rubro": "Servicios", "persona": "Compartido", "match": "metrogas", "nota": "Se debita entre el 2 y el 6.", "estado": "activa"}];
+const FRECS={mensual:1,bimestral:2,trimestral:3,semestral:6,anual:12};
+function subsItems(){return S.subsDoc?S.subsDoc.items:(_YO()==="Mati"?structuredClone(SUBS_SEED):[])}
+async function guardarSubs(items){S.subsDoc={items};try{await S.db.doc("config/suscripciones").set({items})}catch(e){toast("No se guardó: "+(e.message||e.code));throw e}}
+function sumarMeses(f,k){const[y,m,d]=f.split("-").map(Number);const u=new Date(y,m-1+k+1,0).getDate();const x=new Date(y,m-1+k,Math.min(d,u));return isoDate(x)}
+// último pago: el mayor entre lo guardado y un gasto de la app cuya descripción coincide
+function subUltimo(s){let u={fecha:s.ultimo,monto:s.monto,moneda:s.moneda,desdeApp:false};let re=null;try{re=s.match?new RegExp(s.match,"i"):null}catch{}
+  if(re)todosMovs().forEach(x=>{if(x.tipo==="gasto"&&!x.archivado&&x.fecha<=hoyISO()&&(!u.fecha||x.fecha>u.fecha)&&re.test(x.desc||"")){u={fecha:x.fecha,monto:x.moneda==="USD"?x.montoOrig:x.monto,moneda:x.moneda||"ARS",desdeApp:true}}});
+  return u}
+function subCalc(s){const u=subUltimo(s),k=FRECS[s.frec]||1,hoy=hoyISO();if(!u.fecha)return{u,prox:null,sinVer:[]};
+  let p=sumarMeses(u.fecha,k),sinVer=[],i=0;while(p<hoy&&i<40){sinVer.push(p);p=sumarMeses(u.fecha,k*(sinVer.length+1));i++}
+  return{u,prox:p,sinVer}}
+const enDias=f=>Math.round((new Date(f+"T12:00")-new Date(hoyISO()+"T12:00"))/864e5);
+const cuando=f=>{const n=enDias(f);return n===0?"hoy":n===1?"mañana":n<0?`hace ${-n} días`:`en ${n} días`};
+function aPesos(m,mon){return mon==="USD"?m*S.config.params.tc:m}
+function costoMensual(xs){return xs.reduce((a,s)=>a+aPesos(+s.monto||0,s.moneda)/(FRECS[s.frec]||1),0)}
+function proximosCobros(dias){return subsItems().filter(s=>s.estado!=="cancelada").map(s=>({s,c:subCalc(s)})).filter(x=>x.c.prox&&enDias(x.c.prox)<=dias).sort((a,b)=>a.c.prox.localeCompare(b.c.prox))}
+function subFila(s){const c=subCalc(s);const baja=s.estado==="revisar";
+  return `<button type="button" class="cat sub" data-sube="${esc(s.id)}">${ico(s.rubro||"Suscripciones")}<span class="n">${esc(s.servicio)}${baja?` <small class="tag">quiero darla de baja</small>`:""}<br><small class="muted">${esc(s.frec)} · último ${c.u.fecha?esc(fCorta(c.u.fecha))+(c.u.fecha.slice(0,4)!==hoyISO().slice(0,4)?" "+c.u.fecha.slice(0,4):""):"—"}${c.sinVer.length?` · <span class="warn-t">falta confirmar ${esc(fCorta(c.sinVer[c.sinVer.length-1]))}</span>`:""}</small></span>
+   <span class="m">${esc(fmt(+s.monto,s.moneda))}<br><small class="muted">${c.prox?esc(fCorta(c.prox))+" · "+cuando(c.prox):""}</small></span></button>`}
+function vSubs(){const xs=subsItems();const act=xs.filter(s=>s.estado!=="cancelada"),canc=xs.filter(s=>s.estado==="cancelada");
+  const subs=act.filter(s=>s.tipo!=="d"),debs=act.filter(s=>s.tipo==="d");const orden=a=>a.sort((x,y)=>(subCalc(x).prox||"9").localeCompare(subCalc(y).prox||"9"));
+  const prox=proximosCobros(7);
+  return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Suscripciones</h2></header>
+  <div class="balance"><span>Suscripciones por mes (aprox.)</span><b class="num">${esc(fmt(costoMensual(subs)))}</b><span class="small muted" style="text-transform:none;letter-spacing:0">Las anuales cuentan /12 y los dólares a ${esc(fmt(S.config.params.tc))}</span></div>
+  ${prox.length?`<div class="pend"><b class="small">Se cobran en los próximos 7 días</b>${prox.map(x=>`<div class="it"><span>${esc(x.s.servicio)} · ${esc(fCorta(x.c.prox))} (${cuando(x.c.prox)}) · ${esc(fmt(+x.s.monto,x.s.moneda))}</span><button type="button" data-subpay="${esc(x.s.id)}">Cargar pago</button></div>`).join("")}</div>`:""}
+  <div class="card" style="padding-block:6px"><h3 style="padding-top:8px">Suscripciones</h3>${subs.length?orden(subs).map(subFila).join(""):`<div class="state">No hay suscripciones.</div>`}</div>
+  <div class="card" style="padding-block:6px"><h3 style="padding-top:8px">Débitos automáticos de servicios</h3>${debs.length?orden(debs).map(subFila).join(""):`<div class="state">No hay débitos.</div>`}</div>
+  <button type="button" data-go="subEdit" data-nuevo="1">+ Agregar suscripción</button>
+  ${canc.length?`<div class="card" style="padding-block:6px"><h3 style="padding-top:8px">Dadas de baja</h3>${canc.map(s=>`<button type="button" class="cat" data-sube="${esc(s.id)}">${ico(s.rubro||"Suscripciones")}<span class="n">${esc(s.servicio)}<br><small class="muted">baja ${s.baja?esc(fCorta(s.baja)):""}</small></span><span class="m muted">${esc(fmt(+s.monto,s.moneda))}</span></button>`).join("")}</div>`:""}
+  <p class="small muted" style="margin:0">El último pago se actualiza solo cuando cargás un gasto con ese nombre (por ejemplo "Canva"). "Falta confirmar" quiere decir que ya pasó la fecha y todavía no lo ves cargado: aparece en el próximo resumen.</p>`}
+function vSubEdit(p){const s=S.se||(S.se=p.nuevo?{id:"s"+uid(),tipo:"s",servicio:"",tarjeta:"",frec:"mensual",monto:"",moneda:"ARS",ultimo:hoyISO(),medio:"Visa BBVA",rubro:"Suscripciones",persona:_YO(),match:"",nota:"",estado:"activa",_nuevo:true}:structuredClone(subsItems().find(x=>x.id===p.id)));
+  if(!s)return `<div class="state">No existe.</div>`;const c=s._nuevo?null:subCalc(s);
+  return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">${s._nuevo?"Nueva suscripción":esc(s.servicio)}</h2></header>
+  ${c?`<div class="card"><div class="trow"><div class="h"><span>Último pago</span><span>${c.u.fecha?esc(fCorta(c.u.fecha)+" "+c.u.fecha.slice(0,4)):"—"}${c.u.desdeApp?" (cargado en la app)":""}</span></div></div>
+   <div class="trow"><div class="h"><span>Próximo cobro</span><span>${c.prox?esc(fCorta(c.prox)+" "+c.prox.slice(0,4))+" · "+cuando(c.prox):"—"}</span></div></div>
+   ${c.sinVer.length?`<div class="need">Ya pasó ${c.sinVer.length>1?"las fechas":"la fecha"} ${c.sinVer.map(fCorta).join(", ")} y no lo veo cargado. Si se cobró, cargalo; si no, revisá si sigue activa.</div>`:""}
+   ${s.estado!=="cancelada"?`<button type="button" data-subpay="${esc(s.id)}">Cargar este pago como gasto</button>`:""}</div>`:""}
+  <form class="card" id="fSub" autocomplete="off">
+   <label>Servicio<input id="sServ" value="${esc(s.servicio)}" placeholder="ej. Netflix"></label>
+   <label>Cómo figura en la tarjeta<input id="sTarj" value="${esc(s.tarjeta)}" placeholder="ej. NETFLIX.COM"></label>
+   <div class="row"><label>Monto<input id="sMonto" inputmode="decimal" value="${esc(String(s.monto).replace(".",","))}"></label>
+    <label>Moneda<select id="sMon">${["ARS","USD"].map(m=>`<option ${m===s.moneda?"selected":""}>${m}</option>`).join("")}</select></label></div>
+   <div class="row"><label>Se renueva<select id="sFrec">${Object.keys(FRECS).map(k=>`<option ${k===s.frec?"selected":""}>${k}</option>`).join("")}</select></label>
+    <label>Último pago<input id="sUlt" type="date" value="${esc(s.ultimo||"")}"></label></div>
+   <div class="row"><label>Tipo<select id="sTipo"><option value="s" ${s.tipo!=="d"?"selected":""}>Suscripción</option><option value="d" ${s.tipo==="d"?"selected":""}>Débito automático</option></select></label>
+    <label>Se paga con<input id="sMedio" value="${esc(s.medio||"")}"></label></div>
+   <div class="row"><label>Rubro<select id="sRub">${Object.keys(RUBROS).map(r=>`<option ${r===s.rubro?"selected":""}>${esc(r)}</option>`).join("")}</select></label>
+    <label>Palabra para reconocer el pago<input id="sMatch" value="${esc(s.match||"")}" placeholder="ej. netflix"></label></div>
+   <label>Nota<input id="sNota" value="${esc(s.nota||"")}"></label>
+   ${s._nuevo?"":`<label class="toggle"><input type="checkbox" id="sRev" ${s.estado==="revisar"?"checked":""}>Ya no me interesa: quiero darla de baja</label>`}
+   <button class="primary" type="submit">Guardar</button>
+   ${s._nuevo?"":`<button type="button" class="${s.estado==="cancelada"?"":"danger"}" data-act="subBaja">${s.estado==="cancelada"?"Volver a activarla":"Ya la di de baja"}</button><div class="hint">Las que das de baja no se borran: pasan a "Dadas de baja".</div>`}
+  </form>`}
+function leerSub(){const g=i=>document.getElementById(i);const s=S.se;if(!s||!g("sServ"))return;
+  s.servicio=g("sServ").value.trim();s.tarjeta=g("sTarj").value.trim();s.monto=evalMonto(g("sMonto").value);s.moneda=g("sMon").value;s.frec=g("sFrec").value;s.ultimo=g("sUlt").value||null;
+  s.tipo=g("sTipo").value;s.medio=g("sMedio").value.trim();s.rubro=g("sRub").value;s.match=g("sMatch").value.trim();s.nota=g("sNota").value.trim();
+  if(g("sRev")&&s.estado!=="cancelada")s.estado=g("sRev").checked?"revisar":"activa"}
+async function subGuardar(){leerSub();const s=S.se;if(!s.servicio)return toast("Poné el nombre del servicio.");if(!(s.monto>0))return toast("Poné el monto.");
+  if(s.match){try{new RegExp(s.match,"i")}catch{return toast("La palabra para reconocer tiene un símbolo raro.")}}else s.match=norm(s.servicio).split(" ")[0];
+  const{_nuevo,...l}=s;const xs=subsItems();const items=_nuevo?[...xs,l]:xs.map(x=>x.id===s.id?l:x);try{await guardarSubs(items);toast("Guardado")}catch{return}S.se=null;back()}
+async function subBaja(){leerSub();const s=S.se;const vuelve=s.estado==="cancelada";const items=subsItems().map(x=>x.id===s.id?{...x,...(({_nuevo,...r})=>r)(s),estado:vuelve?"activa":"cancelada",baja:vuelve?null:hoyISO()}:x);
+  try{await guardarSubs(items);toast(vuelve?"Activa de nuevo":"Pasó a dadas de baja")}catch{return}S.se=null;back()}
+function subPagar(id){const s=subsItems().find(x=>x.id===id);if(!s)return;const fm=nuevoForm();const c=cuentaPorNombre(s.medio==="Visa BBVA"?"BBVA":s.medio);
+  Object.assign(fm,{desc:s.servicio,monto:String(s.monto).replace(".",","),moneda:s.moneda==="USD"?"USD":"ARS",rubro:s.rubro||"Suscripciones",persona:s.persona||_YO(),touchedRubro:true,touchedPersona:true});
+  if(c)fm.cuenta=c.nombre;abrirCargar(fm)}
+function cardProximos(){const xs=proximosCobros(3);if(!xs.length)return "";
+  return `<div class="card" style="gap:6px"><div class="h" style="display:flex;justify-content:space-between;align-items:center"><h3>Próximos cobros</h3><button type="button" class="ghost" data-go="subs">Ver todas</button></div>
+   ${xs.map(x=>`<div class="small" style="display:flex;justify-content:space-between;gap:8px"><span>${esc(x.s.servicio)} · ${cuando(x.c.prox)}</span><span class="num">${esc(fmt(+x.s.monto,x.s.moneda))}</span></div>`).join("")}</div>`}
+
+
 // ================= render =================
 function render(full){if(!S.ready)return;
-  const a=document.activeElement;if(!full&&a&&a.id&&/^(i|c|t|a|h|p)[A-Z]/.test(a.id)&&a.tagName!=="BUTTON")return;
+  const a=document.activeElement;if(!full&&a&&a.id&&/^(i|c|t|a|h|p|s)[A-Z]/.test(a.id)&&a.tagName!=="BUTTON")return;
   if(scr().name==="cargar"&&!full)leerForm();
   S._sl=null;const s=scr();
-  const V={inicio:vInicio,cuentas:vCuentas,topes:vTopes,mas:vMas,cargar:vCargar,lista:vLista,cuenta:vCuenta,cuentaEdit:vCuentaEdit,transfer:vTransfer,ajuste:vAjuste,habituales:vHabituales,habEdit:vHabEdit,ajustes:vAjustes,movSimple:vMovSimple,sync:vSync};
+  const V={inicio:vInicio,cuentas:vCuentas,topes:vTopes,mas:vMas,cargar:vCargar,lista:vLista,cuenta:vCuenta,cuentaEdit:vCuentaEdit,transfer:vTransfer,ajuste:vAjuste,habituales:vHabituales,habEdit:vHabEdit,ajustes:vAjustes,movSimple:vMovSimple,subs:vSubs,subEdit:vSubEdit,sync:vSync};
   $("#view").innerHTML=(V[s.name]||vInicio)(s);
   $("#fab").hidden=!["inicio","cuentas","topes"].includes(s.name);
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===S.tab?"page":"false"))}
@@ -645,7 +758,7 @@ function calcKey(k){leerForm();const f=S.form;let v=f.monto||"";
 $("#view").addEventListener("click",async e=>{const t=e.target.closest("button");if(!t)return;const d=t.dataset;const f=S.form;
   if("back" in d)return back();
   if(d.go){const p={};if(d.transf)p.transf=1;if(d.c)p.c=d.c;if(d.nueva)p.nueva=1;if(d.nuevo)p.nuevo=1;if(d.mesact){S.home.per="mes";S.home.ref=hoyISO();ensureSubs()}
-    if(d.go==="cuentaEdit")S.ce=null;if(d.go==="transfer")S.tf=null;if(d.go==="habEdit")S.he=null;return go(d.go,p)}
+    if(d.go==="cuentaEdit")S.ce=null;if(d.go==="transfer")S.tf=null;if(d.go==="habEdit")S.he=null;if(d.go==="subEdit")S.se=null;return go(d.go,p)}
   if(d.htipo){S.home.tipo=d.htipo;return render(true)}
   if(d.per){S.home.per=d.per;ensureSubs();return render(true)}
   if(d.pmov)return moverPeriodo(+d.pmov);
@@ -660,9 +773,12 @@ $("#view").addEventListener("click",async e=>{const t=e.target.closest("button")
   if(d.habEdit){const h=S.hab.items.find(x=>x.id===d.habEdit);if(!h)return;const fm=nuevoForm();Object.assign(fm,{monto:String(h.monto),desc:h.desc,rubro:h.rubro,persona:h.persona,cuenta:h.cuenta,fecha:fechaHab(h),touchedRubro:true,touchedPersona:true,habitual:h.id});return abrirCargar(fm)}
   if(d.habSkip){S.hab.saltados=[...S.hab.saltados,d.habSkip+"@"+mesDe(hoyISO())];try{await guardarHab();toast("Salteado este mes")}catch{}render(true);return}
   if(d.color&&S.ce){leerCta();S.ce.color=d.color;return render(true)}
+  if(d.dsug!==undefined&&S.form){leerForm();S.form.desc=d.dsug;if(!S.form.touchedRubro){const sg=suggest(d.dsug);S.form.rubro=sg?sg.rubro:null;if(!S.form.touchedPersona)S.form.persona=sg?(sg.persona||personaDef(sg.rubro)):null}render(true);const b=document.getElementById("descSug");if(b)b.hidden=true;return}
+  if(d.sube){S.se=null;return go("subEdit",{id:d.sube})}
+  if(d.subpay)return subPagar(d.subpay);
   // formulario de carga
   if(f&&scr().name==="cargar"){
-    if(d.tipo){leerForm();f.tipo=d.tipo;if(f.tipo==="ingreso"){f.moneda="ARS";f.cuotas=1;f.compartida=false;f.reservado=false}return render(true)}
+    if(d.tipo){leerForm();f.tipo=d.tipo;if(f.tipo==="ingreso"){f.moneda="ARS";f.cuotas=1;f.compartida=false}return render(true)}
     if(d.ingtipo){leerForm();f.ingTipo=d.ingtipo;return render(true)}
     if(d.moneda){leerForm();f.moneda=d.moneda;return render(true)}
     if(d.rubro){leerForm();f.rubro=d.rubro;f.touchedRubro=true;if(!f.touchedPersona)f.persona=personaDef(f.rubro);return render(true)}
@@ -687,6 +803,7 @@ $("#view").addEventListener("click",async e=>{const t=e.target.closest("button")
     try{await S.db.doc(`meses/${ed.mes}/movs/${ed.id}`).update({archivado:a,actualizado:Date.now()});toast(a?"Archivado. Se puede restaurar.":"Restaurado")}catch(err){return toast("No se pudo: "+(err.message||err.code))}
     S.editing=null;S.form=null;S.confirmArch=false;return back()}
   if(act==="ctaArch"){const c=S.ce;const all=cuentas(true).map(x=>x.id===c.id?{...x,archivada:!x.archivada}:x);S.config.cuentasV2=all;try{await guardarConfig();toast(c.archivada?"Cuenta restaurada":"Cuenta archivada")}catch{return}S.stack=[];S.tab="cuentas";return render(true)}
+  if(act==="subBaja")return subBaja();
   if(act==="habToggle"){const h=S.he;S.hab.items=S.hab.items.map(x=>x.id===h.id?{...x,activo:!x.activo}:x);try{await guardarHab()}catch{return}return back()}
   if(act==="csv"){const r=rango();const xs=periodoMeses().flatMap(movsDe).filter(x=>!x.archivado&&x.fecha>=r.desde&&x.fecha<r.hasta);
     const cols=["fecha","tipo","monto","moneda","montoOrig","desc","rubro","persona","grupo","cuenta","ingTipo","desde","hacia","nota"];
@@ -695,15 +812,19 @@ $("#view").addEventListener("click",async e=>{const t=e.target.closest("button")
 });
 $("#view").addEventListener("input",e=>{const id=e.target.id;
   if(id==="iDesc"&&S.form){S.form.desc=e.target.value;if(!S.form.touchedRubro){const sg=suggest(S.form.desc);const prev=S.form.rubro;S.form.rubro=sg?sg.rubro:null;if(!S.form.touchedPersona)S.form.persona=sg?(sg.persona||personaDef(sg.rubro)):null;
-    if(prev!==S.form.rubro){const pos=e.target.selectionStart;leerForm();render(true);const i=$("#iDesc");if(i){i.focus();i.setSelectionRange(pos,pos)}}}}});
+    if(prev!==S.form.rubro){const pos=e.target.selectionStart;leerForm();render(true);const i=$("#iDesc");if(i){i.focus();i.setSelectionRange(pos,pos)}}}paintSug()}});
+$("#view").addEventListener("focusin",e=>{if(e.target.id==="iDesc"){paintSug();const el=e.target;setTimeout(()=>{try{el.scrollIntoView({block:"start",behavior:"smooth"})}catch{}},250)}});
+$("#view").addEventListener("focusout",e=>{if(e.target.id==="iDesc")setTimeout(()=>{if(document.activeElement&&document.activeElement.id==="iDesc")return;const b=document.getElementById("descSug");if(b)b.hidden=true},150)});
+$("#view").addEventListener("pointerdown",e=>{if(e.target.closest("[data-dsug]"))e.preventDefault()});
 $("#view").addEventListener("change",e=>{const id=e.target.id;
   if(id==="iArch"){S.showArch=e.target.checked;return render(true)}
-  if(S.form&&scr().name==="cargar"&&["iCuotas","iComp","iRes","iFecha"].includes(id)){leerForm();if(id==="iComp")S.form.compartida=e.target.checked;if(id==="iRes")S.form.reservado=e.target.checked;return render(true)}
+  if(S.form&&scr().name==="cargar"&&["iCuotas","iComp","iFecha"].includes(id)){leerForm();if(id==="iComp")S.form.compartida=e.target.checked;return render(true)}
   if((id==="tDesde"||id==="tHacia")&&S.tf){leerTf();return render(true)}});
 function leerTf(){const g=i=>document.getElementById(i);const t=S.tf;if(!t)return;t.desde=g("tDesde").value;t.hacia=g("tHacia").value;t.monto=g("tMonto").value;if(g("tDest"))t.montoDest=g("tDest").value;t.fecha=g("tFecha").value||t.fecha;t.nota=g("tNota").value}
 function leerCta(){const g=i=>document.getElementById(i);const c=S.ce;if(!c||!g("cNombre"))return;c.nombre=g("cNombre").value.trim();c.moneda=g("cMon").value;const s=g("cSaldo").value.trim();c.saldoInicial=s===""?null:evalMonto(s.replace(/^−/,"-"));c.desde=g("cDesde").value||hoyISO();c.incluir=g("cIncl").checked}
 $("#view").addEventListener("submit",async e=>{e.preventDefault();const id=e.target.id;const g=i=>document.getElementById(i);
   if(id==="fMov")return guardar();
+  if(id==="fSub")return subGuardar();
   if(id==="fSync"){Sync.cfg.url=g("sUrl").value.trim();Sync.cfg.key=g("sKey").value.trim();await Sync.save();const r=await Sync.ping();toast(r);
     if(r.startsWith("Conectado")&&!S.db.has("config/app")){const n=await Sync.pull();if(n>=0)toast(`Conectado. Traje ${n} registros de la planilla`)}
     Sync.push();return render(true)}
@@ -738,6 +859,8 @@ function vMovSimple(){const x=S.editing;if(!x)return "";
   const db=S.db;
   db.doc("config/app").onSnapshot(s=>{if(s.exists){const d=s.data();S.config={...structuredClone(DEF_CONFIG),...structuredClone(d),params:{...DEF_CONFIG.params,...(d.params||{})}};ensureSubs()}render(false)});
   db.doc("config/memo").onSnapshot(s=>{if(s.exists)S.memo=(s.data().items||[]).map(x=>[x.k,x.r,x.p])});
+  db.doc("config/descs").onSnapshot(s=>{if(s.exists)S.descs=structuredClone(s.data().items||{})});
+  db.doc("config/suscripciones").onSnapshot(s=>{if(s.exists)S.subsDoc={items:structuredClone(s.data().items||[])};render(false)});
   db.doc("config/habituales").onSnapshot(s=>{if(s.exists){const d=s.data();S.hab={items:structuredClone(d.items||[]),saltados:[...(d.saltados||[])]}}render(false)});
   ensureSubs();S.ready=true;render(true);
   Sync.start();
