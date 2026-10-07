@@ -112,6 +112,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .dsug button:first-child{border-top:0}.dsug button small{color:var(--muted);font-family:var(--f-mono)}
 .tag{font-size:11px;background:var(--crit-soft);color:var(--crit);border-radius:99px;padding:1px 7px;font-weight:600}
 .warn-t{color:var(--warn);font-weight:600}
+.papel+.papel{border-top:1px solid var(--line)}.papel .mov{border-top:0}
 .cat.sub .n{white-space:normal}.cat.sub .m{text-align:right}
 details.more{border-top:1px dashed var(--line);padding-top:10px}
 details.more summary{cursor:pointer;color:var(--accent);font-weight:500;font-size:14px}
@@ -338,7 +339,7 @@ const S={db:null,ready:false,tab:"inicio",stack:[],movs:{},subs:{},config:struct
   tf:null,aj:null,ce:null,he:null,se:null,subsDoc:null,descs:{},pickCuenta:false};
 const scr=()=>S.stack[S.stack.length-1]||{name:S.tab};
 function go(name,p={}){S.stack.push({name,...p});render(true);window.scrollTo(0,0)}
-function back(){S.stack.pop();S.confirmArch=false;S.pickCuenta=false;render(true);window.scrollTo(0,0)}
+function back(){S.stack.pop();S.confirmArch=false;S.confirmBorrar=false;S.confirmVaciar=false;S.confirmElim=false;S.pickCuenta=false;render(true);window.scrollTo(0,0)}
 function suggest(desc){const k=norm(desc);if(!k)return null;
   const m=S.memo.find(x=>x[0]===k);if(m)return{rubro:m[1],persona:m[2],por:"lo que elegiste antes"};
   for(const r of REGLAS){if(r[0]==="CS"){if(r[1].test(desc))return{rubro:r[2],persona:null,por:"regla"};continue}
@@ -358,8 +359,13 @@ function ensureSubs(){const hoy=mesDe(hoyISO());const need=new Set([hoy,addMes(h
   periodoMeses().forEach(m=>need.add(m));
   const desdes=cuentas(true).map(c=>c.desde).filter(Boolean).sort();if(desdes.length)mesesEntre(mesDe(desdes[0]),hoy).forEach(m=>need.add(m));
   need.forEach(subMes)}
-const movsDe=m=>(S.movs[m]||[]);
-const todosMovs=()=>Object.values(S.movs).flat();
+// los borrados (en la papelera) no se ven en ningún lado salvo en Más → Papelera
+const movsDe=m=>(S.movs[m]||[]).filter(x=>!x.borrado&&!x.eliminado);
+const todosMovs=()=>Object.values(S.movs).flat().filter(x=>!x.borrado&&!x.eliminado);
+// eliminado = vaciado de la papelera: solo queda una marca sin datos para que los otros dispositivos también lo saquen
+const enPapelera=()=>Object.values(S.movs).flat().filter(x=>x.borrado&&!x.eliminado).sort((a,b)=>b.borrado-a.borrado);
+const papelPorId=k=>{const[m,id]=k.split("|");return (S.movs[m]||[]).find(x=>x.id===id&&x.borrado&&!x.eliminado)};
+async function eliminarDef(xs){for(const x of xs)await S.db.doc(`meses/${x.mes}/movs/${x.id}`).set({eliminado:true,mes:x.mes,actualizado:Date.now()})}
 async function guardarConfig(){S.config.cuentas=cuentas().map(c=>c.nombre);try{await S.db.doc("config/app").set(S.config)}catch(e){toast("No se guardó: "+(e.message||e.code));throw e}}
 async function guardarHab(){try{await S.db.doc("config/habituales").set(S.hab)}catch(e){toast("No se guardó: "+(e.message||e.code));throw e}}
 
@@ -493,8 +499,10 @@ function vCargar(){
    <button class="primary" type="submit" id="bGuardar">${ed?"Guardar cambios":"Añadir"}</button>
    ${ed?archBloque(ed):""}
   </form>`}
-function archBloque(ed){return S.confirmArch?`<div class="confirm">¿Archivar este movimiento? Deja de contar en los totales y en los saldos, pero no se borra: lo podés restaurar desde la lista con "Mostrar archivados".<div class="row"><button type="button" class="danger" data-act="archSi">Archivar</button><button type="button" data-act="archNo">No</button></div></div>`
-  :`<button type="button" class="${ed.archivado?"":"danger"}" data-act="${ed.archivado?"restaurar":"archivar"}">${ed.archivado?"Restaurar":"Archivar"}</button>`}
+function archBloque(ed){
+  if(S.confirmArch)return `<div class="confirm">¿Archivar este movimiento? Deja de contar en los totales y en los saldos, pero no se borra: lo podés restaurar desde la lista con "Mostrar archivados".<div class="row"><button type="button" class="danger" data-act="archSi">Archivar</button><button type="button" data-act="archNo">No</button></div></div>`;
+  if(S.confirmBorrar)return `<div class="confirm">¿Borrar este movimiento? Desaparece de la app y de los totales en todos tus dispositivos. Queda en la papelera (Más → Papelera) por si te arrepentís.<div class="row"><button type="button" class="danger" data-act="borrarSi">Borrar</button><button type="button" data-act="borrarNo">No</button></div></div>`;
+  return `<div class="row"><button type="button" class="${ed.archivado?"":"danger"}" data-act="${ed.archivado?"restaurar":"archivar"}">${ed.archivado?"Restaurar":"Archivar"}</button><button type="button" class="danger" data-act="borrar">Borrar</button></div>`}
 function leerForm(){const f=S.form;if(!f)return;const g=id=>document.getElementById(id);
   if(g("iMonto"))f.monto=g("iMonto").value;if(g("iDesc"))f.desc=g("iDesc").value;if(g("iFecha")&&g("iFecha").value)f.fecha=g("iFecha").value;
   if(g("iCuotas"))f.cuotas=+g("iCuotas").value;if(g("iTotal"))f.total=g("iTotal").value;
@@ -611,6 +619,7 @@ function vMas(){const pend=pendientes().length;
   <div class="card menu" style="padding-block:4px">
    <button type="button" data-go="sync"><span>Sincronización con la planilla</span><small>${esc(Sync.resumen())}</small></button>
    <button type="button" data-go="subs"><span>Suscripciones</span><small>${(()=>{const n=subsItems().filter(s=>s.estado!=="cancelada"&&s.tipo!=="d").length,r=subsItems().filter(s=>s.estado==="revisar").length;return n+" activas"+(r?" · "+r+" para dar de baja":"")})()}</small></button>
+   <button type="button" data-go="papelera"><span>Papelera</span><small>${enPapelera().length||"vacía"}</small></button>
    <button type="button" data-go="habituales"><span>Pagos habituales</span><small>${pend?pend+" para confirmar":S.hab.items.filter(h=>h.activo).length+" activos"}</small></button>
    <button type="button" data-go="ajustes"><span>Ajustes de los topes</span><small>sueldo, dólar, SPY, ahorro</small></button>
    <button type="button" data-go="lista" data-mesact="1"><span>Movimientos del mes y CSV</span><small>${esc(nombreMes(mesDe(hoyISO())))}</small></button>
@@ -738,16 +747,34 @@ function cardProximos(){const xs=proximosCobros(3);if(!xs.length)return "";
    ${xs.map(x=>`<div class="small" style="display:flex;justify-content:space-between;gap:8px"><span>${esc(x.s.servicio)} · ${cuando(x.c.prox)}</span><span class="num">${esc(fmt(+x.s.monto,x.s.moneda))}</span></div>`).join("")}</div>`}
 
 
+// ================= papelera =================
+function vPapelera(){const xs=enPapelera();
+  return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Papelera</h2></header>
+  <p class="small muted" style="margin:0">Lo que borraste. No cuenta en ningún total. Tocá un movimiento para verlo entero, recuperarlo o eliminarlo para siempre.</p>
+  <div class="card" style="padding-block:6px">${xs.length?xs.map(x=>`<div class="papel">${movRow({...x,archivado:false}).replace(/data-edit="[^"]*"/,`data-papel="${esc(x.mes)}|${esc(x.id)}"`)}</div>`).join(""):`<div class="state">La papelera está vacía.</div>`}</div>
+  ${xs.length?(S.confirmVaciar?`<div class="confirm">¿Vaciar la papelera? Se eliminan para siempre ${xs.length} movimiento${xs.length>1?"s":""}, en todos tus dispositivos. No se puede deshacer.<div class="row"><button type="button" class="danger" data-act="vaciarSi">Vaciar</button><button type="button" data-act="vaciarNo">No</button></div></div>`:`<button type="button" class="danger" data-act="vaciar">Vaciar papelera</button>`):""}
+  <p class="small muted" style="margin:0">Muestra lo borrado en los meses que la app tiene abiertos (el actual y el anterior).</p>`}
+function vPapelItem(p){const x=papelPorId(p.k);if(!x)return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Papelera</h2></header><div class="card state">Ya no está en la papelera.</div>`;
+  const fila=(a,b)=>b==null||b===""?"":`<div class="trow"><div class="h"><span>${esc(a)}</span><span>${esc(b)}</span></div></div>`;
+  const tipo=x.tipo==="gasto"?"Gasto":x.tipo==="ingreso"?(x.ingTipo||"Ingreso"):x.tipo==="transferencia"?"Transferencia":"Ajuste de saldo";
+  return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">En la papelera</h2></header>
+  <div class="card"><div class="balance"><span>${esc(tipo)}</span><b class="num">${esc(fmt(x.moneda==="USD"&&x.montoOrig?x.montoOrig:Math.abs(x.monto),x.moneda==="USD"&&x.montoOrig?"USD":"ARS"))}</b></div>
+   ${fila("Descripción",x.tipo==="transferencia"?`${x.desde} → ${x.hacia}`:x.desc)}${fila("Fecha",new Date(x.fecha+"T12:00").toLocaleDateString("es-AR",{weekday:"short",day:"numeric",month:"long",year:"numeric"}))}
+   ${fila("Rubro",x.rubro)}${fila("De quién",x.persona)}${fila("Cuenta",x.cuenta)}${x.moneda==="USD"?fila("En pesos",fmt(x.monto)):""}${x.cuota?fila("Cuota",`${x.cuota.n}/${x.cuota.de}`):""}${fila("Nota",x.nota)}
+   ${fila("Borrado el",new Date(x.borrado).toLocaleDateString("es-AR",{day:"numeric",month:"short"})+" "+new Date(x.borrado).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}))}
+   <button type="button" class="primary" data-recup="${esc(x.mes)}|${esc(x.id)}">Recuperar</button>
+   ${S.confirmElim?`<div class="confirm">¿Eliminar este movimiento para siempre, en todos tus dispositivos? No se puede deshacer.<div class="row"><button type="button" class="danger" data-act="elimSi">Eliminar</button><button type="button" data-act="elimNo">No</button></div></div>`:`<button type="button" class="danger" data-act="elim">Eliminar para siempre</button>`}</div>`}
+
 // ================= render =================
 function render(full){if(!S.ready)return;
   const a=document.activeElement;if(!full&&a&&a.id&&/^(i|c|t|a|h|p|s)[A-Z]/.test(a.id)&&a.tagName!=="BUTTON")return;
   if(scr().name==="cargar"&&!full)leerForm();
   S._sl=null;const s=scr();
-  const V={inicio:vInicio,cuentas:vCuentas,topes:vTopes,mas:vMas,cargar:vCargar,lista:vLista,cuenta:vCuenta,cuentaEdit:vCuentaEdit,transfer:vTransfer,ajuste:vAjuste,habituales:vHabituales,habEdit:vHabEdit,ajustes:vAjustes,movSimple:vMovSimple,subs:vSubs,subEdit:vSubEdit,sync:vSync};
+  const V={inicio:vInicio,cuentas:vCuentas,topes:vTopes,mas:vMas,cargar:vCargar,lista:vLista,cuenta:vCuenta,cuentaEdit:vCuentaEdit,transfer:vTransfer,ajuste:vAjuste,habituales:vHabituales,habEdit:vHabEdit,ajustes:vAjustes,movSimple:vMovSimple,papelera:vPapelera,papelItem:vPapelItem,subs:vSubs,subEdit:vSubEdit,sync:vSync};
   $("#view").innerHTML=(V[s.name]||vInicio)(s);
   $("#fab").hidden=!["inicio","cuentas","topes"].includes(s.name);
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===S.tab?"page":"false"))}
-function abrirCargar(form,editing){S.form=form||nuevoForm();S.editing=editing||null;S.calc=false;S.showAllRub=false;S.otraFecha=false;S.pickCuenta=false;S.confirmArch=false;go("cargar")}
+function abrirCargar(form,editing){S.form=form||nuevoForm();S.editing=editing||null;S.calc=false;S.showAllRub=false;S.otraFecha=false;S.pickCuenta=false;S.confirmArch=false;S.confirmBorrar=false;go("cargar")}
 
 // ================= eventos =================
 document.querySelector("nav.tabs").addEventListener("click",e=>{const b=e.target.closest("button[data-tab]");if(!b)return;S.tab=b.dataset.tab;S.stack=[];S.form=null;S.editing=null;render(true);window.scrollTo(0,0)});
@@ -776,6 +803,8 @@ $("#view").addEventListener("click",async e=>{const t=e.target.closest("button")
   if(d.dsug!==undefined&&S.form){leerForm();S.form.desc=d.dsug;if(!S.form.touchedRubro){const sg=suggest(d.dsug);S.form.rubro=sg?sg.rubro:null;if(!S.form.touchedPersona)S.form.persona=sg?(sg.persona||personaDef(sg.rubro)):null}render(true);const b=document.getElementById("descSug");if(b)b.hidden=true;return}
   if(d.sube){S.se=null;return go("subEdit",{id:d.sube})}
   if(d.subpay)return subPagar(d.subpay);
+  if(d.recup){const[m,id]=d.recup.split("|");try{await S.db.doc(`meses/${m}/movs/${id}`).update({archivado:false,borrado:null,actualizado:Date.now()});toast("Recuperado")}catch(err){return toast("No se pudo: "+(err.message||err.code))}return scr().name==="papelItem"?back():render(true)}
+  if(d.papel){S.confirmElim=false;return go("papelItem",{k:d.papel})}
   // formulario de carga
   if(f&&scr().name==="cargar"){
     if(d.tipo){leerForm();f.tipo=d.tipo;if(f.tipo==="ingreso"){f.moneda="ARS";f.cuotas=1;f.compartida=false}return render(true)}
@@ -799,6 +828,17 @@ $("#view").addEventListener("click",async e=>{const t=e.target.closest("button")
   if(act==="otraFecha"){leerForm();S.otraFecha=true;render(true);const i=$("#iFecha");if(i){i.focus();try{i.showPicker()}catch{}}return}
   if(act==="archivar"){leerForm();S.confirmArch=true;return render(true)}
   if(act==="archNo"){leerForm();S.confirmArch=false;return render(true)}
+  if(act==="borrar"){leerForm();S.confirmBorrar=true;S.confirmArch=false;return render(true)}
+  if(act==="vaciar"){S.confirmVaciar=true;return render(true)}
+  if(act==="vaciarNo"){S.confirmVaciar=false;return render(true)}
+  if(act==="vaciarSi"){const xs=enPapelera();try{await eliminarDef(xs);toast(`Papelera vaciada (${xs.length})`)}catch(err){toast("No se pudo: "+(err.message||err.code))}S.confirmVaciar=false;return render(true)}
+  if(act==="elim"){S.confirmElim=true;return render(true)}
+  if(act==="elimNo"){S.confirmElim=false;return render(true)}
+  if(act==="elimSi"){const x=papelPorId(scr().k);if(x){try{await eliminarDef([x]);toast("Eliminado para siempre")}catch(err){return toast("No se pudo: "+(err.message||err.code))}}S.confirmElim=false;return back()}
+  if(act==="borrarNo"){leerForm();S.confirmBorrar=false;return render(true)}
+  if(act==="borrarSi"){const ed=S.editing;
+    try{await S.db.doc(`meses/${ed.mes}/movs/${ed.id}`).update({archivado:true,borrado:Date.now(),actualizado:Date.now()});toast("Borrado. Está en la papelera.")}catch(err){return toast("No se pudo: "+(err.message||err.code))}
+    S.editing=null;S.form=null;S.confirmBorrar=false;return back()}
   if(act==="archSi"||act==="restaurar"){const ed=S.editing;const a=act==="archSi";
     try{await S.db.doc(`meses/${ed.mes}/movs/${ed.id}`).update({archivado:a,actualizado:Date.now()});toast(a?"Archivado. Se puede restaurar.":"Restaurado")}catch(err){return toast("No se pudo: "+(err.message||err.code))}
     S.editing=null;S.form=null;S.confirmArch=false;return back()}
