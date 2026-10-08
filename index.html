@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-/* Layout: app de una columna para el celular (máx. 560px). Navegación abajo: Inicio · Cuentas · Topes · Más, y botón + flotante para cargar. */
+/* Layout: app de una columna para el celular (máx. 560px). Navegación abajo: Inicio · Cuentas · Topes · Pagos · Registro, y botón + flotante para cargar. */
 :root{
   --bg:#EEF3F0; --surface:#FFFFFF; --sunk:#E2EAE5; --line:#C9D6CF;
   --fg:#13201A; --muted:#5A6B62; --accent:#0E7A5C; --accent-fg:#FFFFFF; --accent-soft:#D3EDE3;
@@ -112,7 +112,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .dsug button:first-child{border-top:0}.dsug button small{color:var(--muted);font-family:var(--f-mono)}
 .tag{font-size:11px;background:var(--crit-soft);color:var(--crit);border-radius:99px;padding:1px 7px;font-weight:600}
 .warn-t{color:var(--warn);font-weight:600}
-.papel+.papel{border-top:1px solid var(--line)}.papel .mov{border-top:0}
+.papel{display:flex;align-items:center;gap:10px}.papel+.papel{border-top:1px solid var(--line)}.papel .mov{border-top:0}
+.psel{flex-direction:row;padding:8px 0}.psel input{width:22px;height:22px;accent-color:var(--accent);margin:0}
 .cat.sub .n{white-space:normal}.cat.sub .m{text-align:right}
 details.more{border-top:1px dashed var(--line);padding-top:10px}
 details.more summary{cursor:pointer;color:var(--accent);font-weight:500;font-size:14px}
@@ -160,6 +161,13 @@ nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 .chipsync{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;font-size:12px;color:var(--muted);background:var(--surface)}
 .chipsync i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.tline{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted)}
+.tline b{color:var(--fg)}
+.big{font-size:26px;font-weight:800}
+.act{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}
+.act:first-child{border-top:0}.act .t{font-family:var(--f-mono);font-size:12px;color:var(--muted);min-width:42px}
+.act .w{flex:1;min-width:0}.act .k{font-size:12px;font-weight:600}.act .k.add{color:var(--ok)}.act .k.ed{color:var(--accent)}.act .k.del{color:var(--crit)}.act .k.arc{color:var(--warn)}
+.act .m{font-family:var(--f-mono);font-size:13px;white-space:nowrap}
 </style>
 <style>:root{padding-top:env(safe-area-inset-top,0px)}body{margin:0}[hidden]{display:none!important}</style>
 </head>
@@ -171,7 +179,8 @@ nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
   <button data-tab="inicio" aria-current="page"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/></svg>Inicio</button>
   <button data-tab="cuentas"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 15h2"/></svg>Cuentas</button>
   <button data-tab="topes"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Topes</button>
-  <button data-tab="mas"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Más</button>
+  <button data-tab="pagos"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Pagos</button>
+  <button data-tab="mas"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></svg>Registro</button>
 </div></nav>
 
 <script>
@@ -338,8 +347,20 @@ const S={db:null,ready:false,tab:"inicio",stack:[],movs:{},subs:{},config:struct
   home:{tipo:"gasto",per:"mes",ref:hoyISO()},form:null,editing:null,calc:false,showAllRub:false,confirmArch:false,showArch:false,
   tf:null,aj:null,ce:null,he:null,se:null,subsDoc:null,descs:{},pickCuenta:false};
 const scr=()=>S.stack[S.stack.length-1]||{name:S.tab};
+// Historial del navegador: cada pantalla abierta (y cada pestaña distinta de Inicio) es un paso.
+// El botón atrás del celular vuelve una pantalla; solo sale de la app desde Inicio.
+const NAV={depth:0,skip:0};
+function navSync(){const t=S.stack.length+(S.tab==="inicio"?0:1);
+  if(t>NAV.depth){while(NAV.depth<t){NAV.depth++;try{history.pushState({d:NAV.depth},"")}catch{}}}
+  else if(t<NAV.depth){const d=t-NAV.depth;NAV.skip++;NAV.depth=t;try{history.go(d)}catch{NAV.skip--}}}
 function go(name,p={}){S.stack.push({name,...p});render(true);window.scrollTo(0,0)}
-function back(){S.stack.pop();S.confirmArch=false;S.confirmBorrar=false;S.confirmVaciar=false;S.confirmElim=false;S.pickCuenta=false;render(true);window.scrollTo(0,0)}
+function limpiarConfirm(){S.confirmArch=false;S.confirmBorrar=false;S.confirmVaciar=false;S.confirmElim=false;S.confirmElimSel=false;S.pickCuenta=false}
+window.addEventListener("popstate",()=>{if(NAV.skip>0){NAV.skip--;return}
+  NAV.depth=Math.max(0,NAV.depth-1);
+  if(S.stack.length){if(scr().name==="cargar"){S.form=null;S.editing=null}S.stack.pop();limpiarConfirm()}
+  else if(S.tab!=="inicio"){S.tab="inicio";S.form=null;S.editing=null}
+  render(true);window.scrollTo(0,0)});
+function back(){S.stack.pop();S.confirmArch=false;S.confirmBorrar=false;S.confirmVaciar=false;S.confirmElim=false;S.confirmElimSel=false;S.pickCuenta=false;render(true);window.scrollTo(0,0)}
 function suggest(desc){const k=norm(desc);if(!k)return null;
   const m=S.memo.find(x=>x[0]===k);if(m)return{rubro:m[1],persona:m[2],por:"lo que elegiste antes"};
   for(const r of REGLAS){if(r[0]==="CS"){if(r[1].test(desc))return{rubro:r[2],persona:null,por:"regla"};continue}
@@ -359,7 +380,7 @@ function ensureSubs(){const hoy=mesDe(hoyISO());const need=new Set([hoy,addMes(h
   periodoMeses().forEach(m=>need.add(m));
   const desdes=cuentas(true).map(c=>c.desde).filter(Boolean).sort();if(desdes.length)mesesEntre(mesDe(desdes[0]),hoy).forEach(m=>need.add(m));
   need.forEach(subMes)}
-// los borrados (en la papelera) no se ven en ningún lado salvo en Más → Papelera
+// los borrados (en la papelera) no se ven en ningún lado salvo en Registro → Papelera
 const movsDe=m=>(S.movs[m]||[]).filter(x=>!x.borrado&&!x.eliminado);
 const todosMovs=()=>Object.values(S.movs).flat().filter(x=>!x.borrado&&!x.eliminado);
 // eliminado = vaciado de la papelera: solo queda una marca sin datos para que los otros dispositivos también lo saquen
@@ -367,7 +388,7 @@ const enPapelera=()=>Object.values(S.movs).flat().filter(x=>x.borrado&&!x.elimin
 const papelPorId=k=>{const[m,id]=k.split("|");return (S.movs[m]||[]).find(x=>x.id===id&&x.borrado&&!x.eliminado)};
 async function eliminarDef(xs){for(const x of xs)await S.db.doc(`meses/${x.mes}/movs/${x.id}`).set({eliminado:true,mes:x.mes,actualizado:Date.now()})}
 async function guardarConfig(){S.config.cuentas=cuentas().map(c=>c.nombre);try{await S.db.doc("config/app").set(S.config)}catch(e){toast("No se guardó: "+(e.message||e.code));throw e}}
-async function guardarHab(){try{await S.db.doc("config/habituales").set(S.hab)}catch(e){toast("No se guardó: "+(e.message||e.code));throw e}}
+async function guardarHab(){try{await S.db.doc("config/habituales").set({...S.hab,actualizado:Date.now()})}catch(e){toast("No se guardó: "+(e.message||e.code));throw e}}
 
 // saldos: saldo inicial + movimientos posteriores a su fecha y hasta hoy
 function saldos(){const o={};const hoy=hoyISO();
@@ -400,12 +421,28 @@ function donut(parts,total){const R=80,C=2*Math.PI*R;let off=0;const pos=parts.f
   return `<div class="donut"><svg viewBox="0 0 200 200" role="img" aria-label="Total ${esc(fmt(total))}"><circle r="${R}" cx="100" cy="100" fill="none" stroke="var(--sunk)" stroke-width="26"/>${segs}<text x="100" y="108" text-anchor="middle" font-size="24" font-weight="800">${esc(fmtC(total))}</text></svg></div>`}
 
 // ================= pagos habituales =================
-function pendientes(){const hoy=hoyISO(),m=mesDe(hoy),d=+hoy.slice(8);const hechos=new Set(movsDe(m).filter(x=>x.habitual).map(x=>x.habitual));
-  return S.hab.items.filter(h=>h.activo&&h.dia<=d&&!hechos.has(h.id)&&!S.hab.saltados.includes(h.id+"@"+m)).sort((a,b)=>a.dia-b.dia)}
-function proximos(){const hoy=hoyISO(),m=mesDe(hoy),d=+hoy.slice(8);const hechos=new Set(movsDe(m).filter(x=>x.habitual).map(x=>x.habitual));
-  return S.hab.items.filter(h=>h.activo&&h.dia>d&&!hechos.has(h.id)).sort((a,b)=>a.dia-b.dia)}
-function fechaHab(h){const m=mesDe(hoyISO());const ult=new Date(+m.slice(0,4),+m.slice(5),0).getDate();return `${m}-${pad(Math.min(h.dia,ult))}`}
-function movDesdeHab(h,monto){return{tipo:"gasto",fecha:fechaHab(h),mes:mesDe(hoyISO()),cuenta:h.cuenta,nota:"",origen:"app",archivado:false,moneda:"ARS",monto,
+// Cada pago habitual genera "ocurrencias" en el mes (una si es mensual, una por semana si es semanal).
+// Una ocurrencia está hecha si hay un gasto cargado desde el aviso o, si no, uno cargado a mano con el mismo rubro y la palabra principal de la descripción
+// (para semanales, en la misma semana). Cada gasto cubre una sola ocurrencia.
+const DSEM=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+function ocurrencias(h,m){const ult=new Date(+m.slice(0,4),+m.slice(5),0).getDate();
+  if(h.frec==="semanal"){const o=[];for(let d=1;d<=ult;d++){const f=`${m}-${pad(d)}`;if(new Date(f+"T12:00").getDay()===(h.dsem??5))o.push(f)}return o}
+  return [`${m}-${pad(Math.min(h.dia||1,ult))}`]}
+const palabraClave=s=>(norm(s).replace(/\(.*?\)/g," ").split(/[^a-z0-9ñ]+/).filter(w=>w.length>2)[0])||norm(s);
+function estadoHab(){const m=mesDe(hoyISO());const xs=movsDe(m).filter(x=>x.tipo==="gasto"&&!x.archivado);const usados=new Set();
+  const occ=[];S.hab.items.filter(h=>h.activo).forEach(h=>ocurrencias(h,m).forEach(f=>occ.push({h,f,key:h.id+"@"+f})));
+  occ.sort((a,b)=>a.f.localeCompare(b.f));
+  const enRango=(o,x)=>o.h.frec!=="semanal"||lunesISO(x.fecha)===lunesISO(o.f);
+  for(const o of occ){const x=xs.find(x=>!usados.has(x.id)&&x.habitual===o.h.id&&enRango(o,x));if(x){usados.add(x.id);o.hecho=x}}
+  for(const o of occ){if(o.hecho)continue;const k=palabraClave(o.h.desc);
+    const x=xs.find(x=>!usados.has(x.id)&&!x.habitual&&x.rubro===o.h.rubro&&enRango(o,x)&&norm(x.desc).includes(k));if(x){usados.add(x.id);o.hecho=x}}
+  const salt=new Set(S.hab.saltados);
+  return occ.map(o=>({...o.h,fecha:o.f,occ:o.key,hecho:!!o.hecho,salteado:salt.has(o.key)||(o.h.frec!=="semanal"&&salt.has(o.h.id+"@"+m))}))}
+function pendientes(){const hoy=hoyISO();return estadoHab().filter(o=>!o.hecho&&!o.salteado&&o.fecha<=hoy)}
+function proximos(){const hoy=hoyISO();return estadoHab().filter(o=>!o.hecho&&!o.salteado&&o.fecha>hoy)}
+const cuandoHab=h=>h.frec==="semanal"?`cada ${DSEM[h.dsem??5]}`:`día ${h.dia}`;
+function fechaHab(h){const m=mesDe(hoyISO());const ult=new Date(+m.slice(0,4),+m.slice(5),0).getDate();return `${m}-${pad(Math.min(h.dia||1,ult))}`}
+function movDesdeHab(h,monto,fecha){fecha=fecha||fechaHab(h);return{tipo:"gasto",fecha,mes:mesDe(fecha),cuenta:h.cuenta,nota:"",origen:"app",archivado:false,moneda:"ARS",monto,
   rubro:h.rubro,persona:h.persona||personaDef(h.rubro),grupo:RUBROS[h.rubro],desc:h.desc,compartida:null,habitual:h.id,creado:Date.now(),actualizado:Date.now()}}
 
 // ================= vistas: Inicio =================
@@ -418,7 +455,7 @@ function vInicio(){const h=S.home,r=rango(),xs=movsPeriodo(),sl=saldos();
   return `<header class="top"><h1>Caja ${esc(YO())}</h1>${syncChip()}</header>
   ${!Sync.cfg.url?`<div class="need">Conectá tu planilla para traer tus cuentas y pagos habituales, y para que lo que cargues quede respaldado. <button type="button" class="ghost" data-go="sync">Configurar</button></div>`:Sync.alerta()?`<div class="need">${esc(Sync.alerta())} <button type="button" class="ghost" data-go="sync">Ver</button></div>`:""}
   <div class="balance"><span>Total en cuentas</span><b class="num">${esc(fmt(totalCuentas(sl)))}</b></div>
-  ${pend.length?`<div class="pend"><b class="small">Pagos habituales para confirmar</b>${pend.slice(0,4).map(p=>`<div class="it"><span>${esc(p.desc)} · día ${p.dia} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.id}">Cargar</button><button type="button" data-hab-edit="${p.id}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.id}">Saltear</button></div>`).join("")}${pend.length>4?`<button type="button" class="ghost" data-go="habituales">Ver los ${pend.length}</button>`:""}</div>`:""}
+  ${pend.length?`<div class="pend"><b class="small">Pagos habituales para confirmar</b>${pend.slice(0,4).map(p=>`<div class="it"><span>${esc(p.desc)} · ${esc(fCorta(p.fecha))} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.occ}">Cargar</button><button type="button" data-hab-edit="${p.occ}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.occ}">Saltear</button></div>`).join("")}${pend.length>4?`<button type="button" class="ghost" data-go="habituales">Ver los ${pend.length}</button>`:""}</div>`:""}
   ${cardProximos()}
   <div class="card" style="gap:10px">
    <div class="under">${[["gasto","Gastos"],["ingreso","Ingresos"]].map(([k,t])=>`<button type="button" data-htipo="${k}" aria-pressed="${h.tipo===k}">${t}</button>`).join("")}</div>
@@ -501,7 +538,7 @@ function vCargar(){
   </form>`}
 function archBloque(ed){
   if(S.confirmArch)return `<div class="confirm">¿Archivar este movimiento? Deja de contar en los totales y en los saldos, pero no se borra: lo podés restaurar desde la lista con "Mostrar archivados".<div class="row"><button type="button" class="danger" data-act="archSi">Archivar</button><button type="button" data-act="archNo">No</button></div></div>`;
-  if(S.confirmBorrar)return `<div class="confirm">¿Borrar este movimiento? Desaparece de la app y de los totales en todos tus dispositivos. Queda en la papelera (Más → Papelera) por si te arrepentís.<div class="row"><button type="button" class="danger" data-act="borrarSi">Borrar</button><button type="button" data-act="borrarNo">No</button></div></div>`;
+  if(S.confirmBorrar)return `<div class="confirm">¿Borrar este movimiento? Desaparece de la app y de los totales en todos tus dispositivos. Queda en la papelera (Registro → Papelera) por si te arrepentís.<div class="row"><button type="button" class="danger" data-act="borrarSi">Borrar</button><button type="button" data-act="borrarNo">No</button></div></div>`;
   return `<div class="row"><button type="button" class="${ed.archivado?"":"danger"}" data-act="${ed.archivado?"restaurar":"archivar"}">${ed.archivado?"Restaurar":"Archivar"}</button><button type="button" class="danger" data-act="borrar">Borrar</button></div>`}
 function leerForm(){const f=S.form;if(!f)return;const g=id=>document.getElementById(id);
   if(g("iMonto"))f.monto=g("iMonto").value;if(g("iDesc"))f.desc=g("iDesc").value;if(g("iFecha")&&g("iFecha").value)f.fecha=g("iFecha").value;
@@ -582,79 +619,133 @@ function vAjuste(p){const c=cuentaPorNombre(p.c);const s=saldos()[p.c];
   <label>Saldo real hoy<input id="aReal" inputmode="decimal" placeholder="0"></label><label>Comentario<input id="aNota" placeholder="opcional"></label>
   <button class="primary" type="submit">Ajustar</button></form>`}
 
-// ================= Topes =================
-function calcTopes(){const p=S.config.params,b=S.config.base;if(!b)return null;
-  const ing=p.sueldoUsd*p.tc+p.cami,spy=p.spyUsd*p.tc*1.01,viaje=p.viajeUsd*p.tc,ahorro=ing*p.ahorroPct/100;
-  const disc=ing-b.fijosNec-spy-viaje-ahorro;const d=Math.max(disc,0);const imprev=d*p.imprevPct/100,rep=d-imprev;
-  const tot=DISC.reduce((s,k)=>s+(b.share[k]||0),0)||1;const rub={};
-  DISC.forEach(k=>{const mm=rep*(b.share[k]||0)/tot;const s=b.pers[k]||b.pers._total;rub[k]={yo:mm*s[YO()],Compartido:mm*s.Compartido}});
-  const st=b.pers._total;rub["Imprevistos (Tecnología)"]={yo:imprev*st[YO()],Compartido:imprev*st.Compartido};return{ing,spy,viaje,ahorro,disc,rub}}
+// ================= corrección de listas (una sola vez, v10) =================
+async function migrarV10(){if(YO()!=="Mati")return;try{const hoy=hoyISO();
+  if(S.hab.items.length&&!S.hab.v10){const it=S.hab.items.map(h=>{
+      if(["h5","h12","h13"].includes(h.id))return{...h,activo:false};
+      if(h.id==="h16")return{...h,frec:"semanal",dsem:5,monto:40000,desc:"Terapia"};
+      if(h.id==="h11")return{...h,monto:32000};return h});
+    if(!it.some(h=>h.id==="h17"))it.push({id:"h17",desc:"YouTube Premium",monto:10300,dia:3,rubro:"Suscripciones",persona:"Mati",cuenta:"BBVA",activo:true});
+    S.hab={...S.hab,items:it,v10:true};await guardarHab()}
+  if(!(S.subsDoc&&S.subsDoc.v10)){const items=subsItems().map(s=>{
+      if(["chati","canva","lotus","chesscom"].includes(s.id))return{...s,estado:"cancelada",baja:s.baja||hoy,nota:(s.id==="chati"?"Cargo por error de un solo mes. ":"Renovación cancelada el 8/10/2026. ")+(s.nota||"")};
+      if(s.id==="claude")return{...s,monto:20,nota:"Plan de USD 20. El 21/9/2026 hubo un cargo de USD 80,71 por un cambio de plan; volvió al de USD 20."};
+      if(s.id==="yt")return{...s,nota:"Plan familiar: ARS 10.299 por mes, Google lo cobra en USD (≈ 6,88) con IVA, IIBB y percepción."};
+      if(s.id==="hbo")return{...s,nota:"Pagado hasta el 17/8/2027. No renovar. "+(s.nota||"")};
+      return s});
+    await guardarSubs(items)}
+  render(false)}catch(e){}}
+// ================= Topes (solo Mati) =================
+// Montos de la pestaña "Proyección nueva (oct-26)" de la planilla. Se cambian en Topes → Ajustar topes.
+const DEF_TOPES={comida:70000,salidas:130000,joda:20000,bajon:25000,flores:70000,floresExtra:70000,eventuales:200000,ropaTrim:270000};
+const TOPE_RUB=[["salidas","Salidas",["Salidas"]],["comida","Comida en la calle",["Comida del día"]],["joda","Joda",["Joda"]],["bajon","Bajón",["Bajón"]],["flores","Flores",["Flores"]]];
+const EVENT_RUB=["Salud","Hogar","Regalos","Otros","Tecnología"];
+const topesCfg=()=>({...DEF_TOPES,...(S.config.topesMati||{})});
+function gastoEn(xs,rubros,soloMati){let s=0;for(const x of xs){if(x.archivado||!rubros.includes(x.rubro))continue;if(soloMati&&x.persona!=="Mati")continue;
+  if(x.tipo==="gasto")s+=x.monto;else if(x.tipo==="ingreso"&&x.ingTipo==="Reintegro")s-=x.monto}return s}
 function barra(g,t){const r=t>0?g/t:(g>0?2:0);const c=r>1?"crit":r>.8?"warn":"";return `<div class="bar" role="img" aria-label="${Math.round(r*100)}% del tope"><i class="${c}" style="width:${Math.min(r,1)*100}%"></i></div>`}
-function vTopes(){const T=calcTopes();if(!T)return `<header class="top"><h1>Topes</h1></header><div class="card state">Faltan los datos base de los topes.</div>`;
-  const hoy=hoyISO(),lu=lunesISO(hoy),fin=addDias(lu,7),mes=mesDe(hoy);
-  const g=[...new Set([mes,mesDe(lu)])].flatMap(movsDe).filter(x=>!x.archivado&&x.tipo==="gasto");
-  const sem=g.filter(x=>x.fecha>=lu&&x.fecha<fin),mesX=movsDe(mes).filter(x=>!x.archivado&&x.tipo==="gasto");
-  const key=r=>DISC.includes(r)?r:(r==="Tecnología"?"Imprevistos (Tecnología)":null);
-  const sum=(xs,per)=>{const o={};xs.forEach(x=>{const k=key(x.rubro);if(k&&x.persona===per)o[k]=(o[k]||0)+x.monto});return o};
-  const sM=sum(sem,YO()),mM=sum(mesX,YO()),sC=sum(sem,"Compartido");const ks=Object.keys(T.rub);
-  const tS=ks.reduce((s,k)=>s+T.rub[k].yo,0)/4.35,gS=ks.reduce((s,k)=>s+(sM[k]||0),0),tM=tS*4.35,gM=ks.reduce((s,k)=>s+(mM[k]||0),0);
-  const cT=ks.reduce((s,k)=>s+T.rub[k].Compartido,0)/4.35,cG=ks.reduce((s,k)=>s+(sC[k]||0),0);
-  const fila=(k,a,t)=>`<div class="trow"><div class="h"><span>${esc(k)}</span><span>${esc(fmt(a))} / ${esc(fmt(t))}</span></div>${barra(a,t)}</div>`;
-  return `<header class="top"><h1>Topes</h1></header>
-  <div class="card"><h3>Tu semana · ${esc(fCorta(lu))} al ${esc(fCorta(addDias(lu,6)))}</h3>
-   <div class="trow"><div class="h"><b>Discrecional ${esc(YO())}</b><span><b>${esc(fmt(gS))} / ${esc(fmt(tS))}</b></span></div>${barra(gS,tS)}<div class="small muted">${gS<=tS?`Te quedan ${esc(fmt(tS-gS))} esta semana.`:`Te pasaste ${esc(fmt(gS-tS))} esta semana.`}</div></div>
-   ${ks.filter(k=>T.rub[k].yo>1).map(k=>fila(k,sM[k]||0,T.rub[k].yo/4.35)).join("")}</div>
-  <div class="card"><h3>Compartido esta semana</h3>${fila("Lo compartido que cargás vos",cG,cT)}<p class="small muted" style="margin:0">Lo compartido que carga ${OTRO()} no se ve en esta app.</p></div>
-  <div class="card"><h3>Tu mes · ${esc(nombreMes(mes))}</h3><div class="trow"><div class="h"><b>Discrecional ${esc(YO())}</b><span><b>${esc(fmt(gM))} / ${esc(fmt(tM))}</b></span></div>${barra(gM,tM)}</div>
-   ${ks.filter(k=>T.rub[k].yo>1).map(k=>fila(k,mM[k]||0,T.rub[k].yo)).join("")}</div>
-  <div class="card"><h3>De dónde salen</h3><div class="tablewrap"><table>
-   <tr><td>Ingresos estimados de la casa</td><td class="n">${esc(fmt(T.ing))}</td></tr><tr><td>Fijos + necesarios (prom. jul–sep 2026)</td><td class="n">−${esc(fmt(S.config.base.fijosNec))}</td></tr>
-   <tr><td>SPY (USD ${S.config.params.spyUsd} + 1%)</td><td class="n">−${esc(fmt(T.spy))}</td></tr><tr><td>Fondo de viaje (USD ${S.config.params.viajeUsd} en total)</td><td class="n">−${esc(fmt(T.viaje))}</td></tr>
-   <tr><td>Ahorro puro (${S.config.params.ahorroPct}%)</td><td class="n">−${esc(fmt(T.ahorro))}</td></tr><tr><th>Discrecional de la casa por mes</th><th class="n">${esc(fmt(T.disc))}</th></tr></table></div>
-   <p class="small muted" style="margin:0">El reparto entre rubros y personas sigue lo gastado desde agosto 2025. La semana es el mes ÷ 4,35. Los supuestos se cambian en Más → Ajustes.</p></div>`}
+// pide meses que la pantalla necesita, fuera del render (evita llamadas en cadena)
+function needMeses(ms){const f=ms.filter(m=>!S.subs[m]);if(f.length)setTimeout(()=>f.forEach(subMes),0)}
+function trimestre(m){const y=+m.slice(0,4),mm=+m.slice(5);const q0=Math.floor((mm-1)/3)*3+1;return [0,1,2].map(i=>`${y}-${pad(q0+i)}`)}
+function vTopes(){
+  if(YO()!=="Mati")return `<header class="top"><h1>Topes</h1></header><div class="card state">Los topes son solo para Mati.</div>`;
+  const T=topesCfg(),hoy=hoyISO(),mes=mesDe(hoy),lu=lunesISO(hoy),finS=addDias(lu,7);
+  const q=trimestre(mes);needMeses([...q,mesDe(lu)]);
+  const xsMes=movsDe(mes),xsSem=[...new Set([mes,mesDe(lu)])].flatMap(movsDe).filter(x=>x.fecha>=lu&&x.fecha<finS&&x.fecha<=hoy);
+  const ult=new Date(+mes.slice(0,4),+mes.slice(5),0).getDate(),dRest=ult-(+hoy.slice(8))+1,semRest=Math.max(1,dRest/7);
+  const linea=(g,tope,semana)=>{const q=tope-g;return `<div class="tline"><span>${q>=0?`Te quedan <b>${esc(fmt(q))}</b> · ≈ ${esc(fmt(q/semRest))} por semana`:`<b style="color:var(--crit)">Te pasaste ${esc(fmt(-q))}</b>`}</span>${semana!=null?`<span>Esta semana ${esc(fmt(semana))}</span>`:""}</div>`};
+  const fila=(nom,g,tope,semana,extra)=>`<div class="trow"><div class="h"><span>${esc(nom)}</span><span>${esc(fmt(g))} / ${esc(fmt(tope))}</span></div>${barra(g,tope)}${linea(g,tope,semana)}${extra||""}</div>`;
+  const R=TOPE_RUB.map(([k,nom,rubs])=>({k,nom,g:gastoEn(xsMes,rubs,k!=="flores"),s:gastoEn(xsSem,rubs,k!=="flores"),t:T[k]}));
+  const sal=R.find(r=>r.k==="salidas"),com=R.find(r=>r.k==="comida");const qSal=sal.t-sal.g+com.t-com.g;
+  const ev=gastoEn(xsMes,EVENT_RUB,false);
+  const ropa=gastoEn(q.flatMap(movsDe),["Ropa y cuidado personal"],true);const qMesesRest=q.filter(m=>m>=mes).length;
+  return `<header class="top"><h1>Topes de ${esc(nombreMes(mes).split(" ")[0])}</h1></header>
+  <div class="card"><h3>Para salir</h3><span class="small muted">Salidas + comida en la calle, lo que queda del mes</span>
+   <div class="big num" style="color:${qSal>=0?"var(--fg)":"var(--crit)"}">${esc(fmt(qSal))}</div>
+   <div class="tline"><span>≈ <b>${esc(fmt(Math.max(qSal,0)/semRest))}</b> por semana · quedan ${dRest} día${dRest>1?"s":""}</span><span>Esta semana ${esc(fmt(sal.s+com.s))}</span></div></div>
+  <div class="card"><h3>Tus gastos del mes</h3>
+   ${R.filter(r=>r.k!=="flores").map(r=>fila(r.nom,r.g,r.t,r.s)).join("")}
+   ${(()=>{const f=R.find(r=>r.k==="flores");return fila("Flores",f.g,f.t,null,`<div class="small muted">Mínimo ${esc(fmt(T.flores))}. El 26, la revisión te dice si alcanza para sumar ${esc(fmt(T.floresExtra))} más.</div>`)})()}</div>
+  <div class="card"><h3>Eventuales</h3>${fila("Salud no fija, hogar, regalos, otros",ev,T.eventuales,null,`<div class="small muted">Fondo para imprevistos. Antes de un regalo, mirá cuánto queda. Suma lo que cargás vos (lo de Cami no se ve en esta app).</div>`)}</div>
+  <div class="card"><h3>Ropa · trimestre ${esc(nombreMes(q[0]).split(" ")[0].slice(0,3).toLowerCase())}–${esc(nombreMes(q[2]).split(" ")[0].slice(0,3).toLowerCase())}</h3>
+   <div class="trow"><div class="h"><span>Ropa y arreglos</span><span>${esc(fmt(ropa))} / ${esc(fmt(T.ropaTrim))}</span></div>${barra(ropa,T.ropaTrim)}
+   <div class="tline"><span>${T.ropaTrim-ropa>=0?`Te quedan <b>${esc(fmt(T.ropaTrim-ropa))}</b> en ${qMesesRest} mes${qMesesRest>1?"es":""}`:`<b style="color:var(--crit)">Te pasaste ${esc(fmt(ropa-T.ropaTrim))}</b>`}</span></div>
+   <div class="small muted">Lo que sobre del trimestre puede ir a flores.</div></div></div>
+  <button type="button" data-go="ajustes">Ajustar topes</button>
+  <p class="small muted" style="margin:0">Cuenta lo que cargaste a tu nombre (las salidas compartidas no entran). La semana va de lunes a domingo. Los montos salen de la proyección de la planilla.</p>`}
 
 // ================= Más, pagos habituales, ajustes =================
-function vMas(){const pend=pendientes().length;
-  return `<header class="top"><h1>Más</h1></header>
+function vMas(){
+  return `<header class="top"><h1>Registro</h1></header>
   <div class="card menu" style="padding-block:4px">
-   <button type="button" data-go="sync"><span>Sincronización con la planilla</span><small>${esc(Sync.resumen())}</small></button>
-   <button type="button" data-go="subs"><span>Suscripciones</span><small>${(()=>{const n=subsItems().filter(s=>s.estado!=="cancelada"&&s.tipo!=="d").length,r=subsItems().filter(s=>s.estado==="revisar").length;return n+" activas"+(r?" · "+r+" para dar de baja":"")})()}</small></button>
-   <button type="button" data-go="papelera"><span>Papelera</span><small>${enPapelera().length||"vacía"}</small></button>
-   <button type="button" data-go="habituales"><span>Pagos habituales</span><small>${pend?pend+" para confirmar":S.hab.items.filter(h=>h.activo).length+" activos"}</small></button>
-   <button type="button" data-go="ajustes"><span>Ajustes de los topes</span><small>sueldo, dólar, SPY, ahorro</small></button>
    <button type="button" data-go="lista" data-mesact="1"><span>Movimientos del mes y CSV</span><small>${esc(nombreMes(mesDe(hoyISO())))}</small></button>
+   <button type="button" data-go="actividad"><span>Actividad</span><small>qué se cargó, cambió o borró</small></button>
+   <button type="button" data-go="papelera"><span>Papelera</span><small>${enPapelera().length||"vacía"}</small></button>
+   <button type="button" data-go="sync"><span>Sincronización con la planilla</span><small>${esc(Sync.resumen())}</small></button>
   </div>
   <div class="card"><h3>Cómo se usa</h3><ul class="small" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
    <li>Los datos se guardan en este dispositivo y funcionan sin internet. Con conexión, la app sube lo que cargaste y baja lo cargado en tus otros dispositivos (celu o compu), sola, cada vez que la abrís y cada minuto mientras está abierta.</li>
    <li>La Visa BBVA la concilia Claude con el resumen: no hace falta cargar cargos ni suscripciones en dólares que no anotaste.</li>
-   <li>Nada se borra: lo que archivás deja de contar y se puede restaurar.</li>
+   <li>Archivar: deja de contar y se puede restaurar. Borrar: va a la Papelera.</li>
+   <li>El botón atrás del celular vuelve a la pantalla anterior.</li>
    <li>En el monto podés escribir cuentas, por ejemplo 1500+2300.</li></ul></div>`}
+// ================= Pagos: suscripciones y pagos habituales =================
+function vPagos(){const pend=pendientes(),prox=proximos(),cob=proximosCobros(31);const subsAct=subsItems().filter(s=>s.estado!=="cancelada"&&s.tipo!=="d");
+  return `<header class="top"><h1>Pagos</h1></header>
+  ${pend.length?`<div class="pend"><b class="small">Pagos habituales para confirmar</b>${pend.map(p=>`<div class="it"><span>${esc(p.desc)} · ${esc(fCorta(p.fecha))} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.occ}">Cargar</button><button type="button" data-hab-edit="${p.occ}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.occ}">Saltear</button></div>`).join("")}</div>`:""}
+  <div class="card menu" style="padding-block:4px">
+   <button type="button" data-go="subs"><span>Suscripciones</span><small>${subsAct.length} activas${(()=>{const r=subsItems().filter(s=>s.estado==="revisar").length;return r?" · "+r+" para dar de baja":""})()}</small></button>
+   <button type="button" data-go="habituales"><span>Pagos habituales</span><small>${pend.length?pend.length+" para confirmar":S.hab.items.filter(h=>h.activo).length+" activos"}</small></button>
+  </div>
+  ${cob.length?`<div class="card" style="gap:6px"><h3>Próximos cobros de suscripciones</h3>${cob.map(x=>`<div class="small" style="display:flex;justify-content:space-between;gap:8px"><span>${esc(x.s.servicio)} · ${cuando(x.c.prox)}</span><span class="num">${esc(fmt(+x.s.monto,x.s.moneda))}</span></div>`).join("")}</div>`:""}
+  ${prox.length?`<div class="card" style="gap:6px"><h3>Pagos habituales que faltan este mes</h3>${prox.map(h=>`<div class="small" style="display:flex;justify-content:space-between;gap:8px"><span>${esc(h.desc)} · ${esc(fCorta(h.fecha))}</span><span class="num">${esc(fmt(+h.monto))}</span></div>`).join("")}</div>`:""}`}
+// ================= Actividad =================
+// Se arma con las marcas que ya tiene cada movimiento (creado, actualizado, borrado, eliminado), así se ve igual en todos los dispositivos.
+function vActividad(){const hoy=hoyISO(),m0=mesDe(hoy);needMeses([m0,addMes(m0,-1),addMes(m0,-2)]);
+  const desde=Date.now()-45*864e5;const ev=[];
+  for(const [m,xs] of Object.entries(S.movs))for(const x of xs||[]){
+    const desc=x.tipo==="transferencia"?`${x.desde} → ${x.hacia}`:x.tipo==="ajuste"?`Ajuste de saldo · ${x.cuenta}`:(x.desc||x.rubro||"");
+    const monto=x.monto!=null?fmt(x.moneda==="USD"&&x.montoOrig?x.montoOrig:Math.abs(x.monto),x.moneda==="USD"&&x.montoOrig?"USD":"ARS"):"";
+    if(x.eliminado){if(x.actualizado)ev.push({ts:x.actualizado,k:"del",que:"Eliminado para siempre",desc:"(sin datos)",monto:"",mes:m});continue}
+    if(x.creado)ev.push({ts:x.creado,k:"add",que:x.habitual?"Cargado (pago habitual)":"Cargado",desc,monto,mes:m,fecha:x.fecha});
+    if(x.borrado)ev.push({ts:x.borrado,k:"del",que:"A la papelera",desc,monto,mes:m});
+    else if(x.archivado&&x.actualizado)ev.push({ts:x.actualizado,k:"arc",que:x.movidoA?"Pasado a otro mes":"Archivado",desc,monto,mes:m});
+    else if(x.actualizado&&(!x.creado||x.actualizado-x.creado>3000)&&x.creado)ev.push({ts:x.actualizado,k:"ed",que:"Editado",desc,monto,mes:m});}
+  const xs=ev.filter(e=>e.ts>=desde).sort((a,b)=>b.ts-a.ts).slice(0,300);const porDia={};
+  xs.forEach(e=>{const d=isoDate(new Date(e.ts));(porDia[d]=porDia[d]||[]).push(e)});
+  return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Actividad</h2></header>
+  <p class="small muted" style="margin:0">Lo que se cargó, cambió, archivó o borró en los últimos 45 días, en todos tus dispositivos. De cada movimiento se ve cuándo se cargó y su último cambio.</p>
+  ${xs.length?Object.entries(porDia).map(([d,es])=>`<div class="card" style="padding-block:6px"><h3 style="padding-top:8px">${esc(d===hoy?"Hoy":cap(new Date(d+"T12:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"short"})))}</h3>
+   ${es.map(e=>`<div class="act"><span class="t">${esc(new Date(e.ts).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}))}</span><div class="w"><div class="k ${e.k}">${esc(e.que)}</div><div class="small">${esc(e.desc)}${e.fecha?` <span class="muted">· ${esc(fCorta(e.fecha))}</span>`:""}</div></div><span class="m">${esc(e.monto)}</span></div>`).join("")}</div>`).join("")
+   :`<div class="card state">Todavía no hay actividad registrada.</div>`}`}
 function vHabituales(){const pend=pendientes(),prox=proximos();const act=S.hab.items.filter(h=>h.activo),inac=S.hab.items.filter(h=>!h.activo);
-  const fila=h=>`<button type="button" class="cat" data-habe="${h.id}">${ico(h.rubro)}<span class="n">${esc(h.desc)}<br><small class="muted">día ${h.dia} · ${esc(h.cuenta)}</small></span><span class="m">${esc(fmt(h.monto))}</span></button>`;
+  const fila=h=>`<button type="button" class="cat" data-habe="${h.id}">${ico(h.rubro)}<span class="n">${esc(h.desc)}<br><small class="muted">${esc(cuandoHab(h))} · ${esc(h.cuenta)}</small></span><span class="m">${esc(fmt(h.monto))}</span></button>`;
   return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Pagos habituales</h2></header>
-  <p class="small muted" style="margin:0">Cuando llega el día, aparecen en Inicio para que los confirmes. Nada se carga solo.</p>
-  ${pend.length?`<div class="pend"><b class="small">Para confirmar</b>${pend.map(p=>`<div class="it"><span>${esc(p.desc)} · día ${p.dia} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.id}">Cargar</button><button type="button" data-hab-edit="${p.id}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.id}">Saltear</button></div>`).join("")}</div>`:""}
-  ${prox.length?`<div class="card"><h3>Próximos este mes</h3><div class="small">${prox.map(h=>`${esc(h.desc)} (día ${h.dia})`).join(" · ")}</div></div>`:""}
+  <p class="small muted" style="margin:0">Cuando llega el día, aparecen en Inicio y en Pagos para que los confirmes. Nada se carga solo. Si ya lo cargaste a mano (mismo rubro y nombre parecido), la app lo reconoce y no te avisa.</p>
+  ${pend.length?`<div class="pend"><b class="small">Para confirmar</b>${pend.map(p=>`<div class="it"><span>${esc(p.desc)} · ${esc(fCorta(p.fecha))} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.occ}">Cargar</button><button type="button" data-hab-edit="${p.occ}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.occ}">Saltear</button></div>`).join("")}</div>`:""}
+  ${prox.length?`<div class="card"><h3>Próximos este mes</h3><div class="small">${prox.map(h=>`${esc(h.desc)} (${esc(fCorta(h.fecha))})`).join(" · ")}</div></div>`:""}
   <div class="card" style="padding-block:6px">${act.length?act.sort((a,b)=>a.dia-b.dia).map(fila).join(""):`<div class="state">No hay pagos habituales.</div>`}</div>
   <button type="button" data-go="habEdit" data-nuevo="1">+ Nuevo pago habitual</button>
   ${inac.length?`<div class="card" style="padding-block:6px"><h3 style="padding-top:8px">Desactivados</h3>${inac.map(fila).join("")}</div>`:""}`}
 function vHabEdit(p){const h=S.he||(S.he=p.nuevo?{id:"h"+uid(),desc:"",monto:"",rubro:"Servicios",persona:"Compartido",cuenta:cuentas()[0].nombre,dia:1,activo:true,_nuevo:true}:{...S.hab.items.find(x=>x.id===p.id)});
   return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">${h._nuevo?"Nuevo pago habitual":"Editar pago habitual"}</h2></header>
   <form class="card" id="fHab"><label>Descripción<input id="hDesc" value="${esc(h.desc)}" placeholder="ej. Edesur"></label>
-  <div class="row"><label>Monto estimado<input id="hMonto" inputmode="decimal" value="${esc(h.monto)}"></label><label>Día del mes<input id="hDia" type="number" min="1" max="31" value="${h.dia}"></label></div>
+  <div class="row"><label>Monto estimado<input id="hMonto" inputmode="decimal" value="${esc(h.monto)}"></label><label>Día del mes<input id="hDia" type="number" min="1" max="31" value="${h.dia||1}"></label></div>
+  <div class="row"><label>Se repite<select id="hFrec"><option value="mensual" ${h.frec!=="semanal"?"selected":""}>Todos los meses</option><option value="semanal" ${h.frec==="semanal"?"selected":""}>Todas las semanas</option></select></label>
+  <label>Día de la semana (si es semanal)<select id="hDsem">${DSEM.map((d,i)=>`<option value="${i}" ${(h.dsem??5)===i?"selected":""}>${d}</option>`).join("")}</select></label></div>
   <div class="row"><label>Rubro<select id="hRubro">${Object.keys(RUBROS).map(r=>`<option ${r===h.rubro?"selected":""}>${esc(r)}</option>`).join("")}</select></label>
   <label>De quién<select id="hPers">${PERSONAS.map(x=>`<option ${x===h.persona?"selected":""}>${x}</option>`).join("")}</select></label></div>
   <label>Cuenta<select id="hCta">${cuentas().map(c=>`<option ${c.nombre===h.cuenta?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select></label>
   <button class="primary" type="submit">Guardar</button>
   ${h._nuevo?"":`<button type="button" class="${h.activo?"danger":""}" data-act="habToggle">${h.activo?"Desactivar":"Activar"}</button>`}</form>`}
-function vAjustes(){const p=S.config.params;const campo=(id,t,v,st)=>`<label>${t}<input id="${id}" type="number" step="${st}" value="${v}"></label>`;
-  return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Ajustes de los topes</h2></header>
-  <form class="card" id="fAj">
-   <div class="row">${campo("pSueldo","Sueldo Mati (USD)",p.sueldoUsd,50)}${campo("pTc","Dólar (pesos por USD)",p.tc,10)}</div>
-   <div class="row">${campo("pCami","Ingresos de Cami ($)",p.cami,50000)}${campo("pSpy","SPY por mes (USD)",p.spyUsd,50)}</div>
-   <div class="row">${campo("pViaje","Fondo de viaje (USD, total)",p.viajeUsd,10)}${campo("pAhorro","Ahorro puro (%)",p.ahorroPct,1)}</div>
-   ${campo("pImprev","Reserva imprevistos (% del discrecional)",p.imprevPct,5)}
-   <button class="primary" type="submit">Guardar ajustes</button></form>`}
+function vAjustes(){const T=topesCfg();const campo=(id,tt,v)=>`<label>${tt}<input id="${id}" inputmode="decimal" value="${v}"></label>`;
+  return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Ajustar topes</h2></header>
+  <form class="card" id="fAj"><p class="small muted" style="margin:0">Montos por mes, en pesos. Solo para Mati.</p>
+   <div class="row">${campo("tSalidas","Salidas",T.salidas)}${campo("tComida","Comida en la calle",T.comida)}</div>
+   <div class="row">${campo("tJoda","Joda",T.joda)}${campo("tBajon","Bajón",T.bajon)}</div>
+   <div class="row">${campo("tFlores","Flores (mínimo)",T.flores)}${campo("tFloresX","Flores extra si alcanza",T.floresExtra)}</div>
+   <div class="row">${campo("tEvent","Eventuales (fondo del mes)",T.eventuales)}${campo("tRopa","Ropa por trimestre",T.ropaTrim)}</div>
+   <button class="primary" type="submit">Guardar topes</button></form>`}
 
 // ================= sugerencias de descripción =================
 // Base: lo que cada uno escribió en la planilla (ago-2025 a sep-2026) + lo que se va cargando en la app (config/descs).
@@ -679,7 +770,7 @@ function aprenderDesc(desc){const d=String(desc||"").trim();if(!d)return;const k
 const SUBS_SEED=[{"id": "yt", "tipo": "s", "servicio": "YouTube Premium", "tarjeta": "GOOGLE *YouTubePremium (antes GOOGLE *YouTubeP …)", "frec": "mensual", "monto": 6.88, "moneda": "USD", "ultimo": "2026-09-03", "medio": "Visa BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "youtube", "nota": "Subió: $1.899 hasta mar-25, USD 2,6–2,9 en 2025, USD 4,7–4,97 desde nov-25 y USD 6,99 en ago-26. Antes se cobraba el 30; desde oct-25, el 3.", "estado": "activa"}, {"id": "claude", "tipo": "s", "servicio": "Claude (Anthropic)", "tarjeta": "— (en el resumen con cierre 1/10, que no está en la carpeta)", "frec": "mensual", "monto": 80.71, "moneda": "USD", "ultimo": "2026-09-21", "medio": "Visa BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "claude|anthropic", "nota": "En septiembre hubo dos cobros: $30.303 el 19/9 (cuenta BBVA) y USD 80,71 el 21/9 (Visa). El próximo monto puede ser distinto.", "estado": "activa"}, {"id": "chati", "tipo": "s", "servicio": "ChatiApp", "tarjeta": "— (pagado desde la cuenta BBVA, no aparece en la Visa)", "frec": "mensual", "monto": 100757.58, "moneda": "ARS", "ultimo": "2026-09-19", "medio": "BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "chati", "nota": "Primer cobro registrado en sep-26. Confirmá qué servicio es y si es mensual.", "estado": "activa"}, {"id": "canva", "tipo": "s", "servicio": "Canva Pro", "tarjeta": "CANVA", "frec": "mensual", "monto": 10285, "moneda": "ARS", "ultimo": "2026-09-06", "medio": "Visa BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "canva", "nota": "En la Visa figura el 19/5 y el 6/8; en junio y julio no aparece. El 6/9 lo anotaste en la app.", "estado": "activa"}, {"id": "hbo", "tipo": "s", "servicio": "HBO Max (plan anual)", "tarjeta": "help hbomax com (antes DLO*help hbomax com)", "frec": "anual", "monto": 97392.9, "moneda": "ARS", "ultimo": "2026-08-17", "medio": "Visa BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "hbo", "nota": "Ago-25: $74.160,90. Ago-26: $97.392,90 (+31%).", "estado": "activa"}, {"id": "lotus", "tipo": "s", "servicio": "Lotus Chess (Google Play)", "tarjeta": "GOOGLE *Lotus Ch", "frec": "anual", "monto": 19.99, "moneda": "USD", "ultimo": "2025-12-27", "medio": "Visa BBVA", "rubro": "Ajedrez", "persona": "Mati", "match": "lotus", "nota": "Un solo cobro en los resúmenes: supongo que es anual.", "estado": "activa"}, {"id": "chesscom", "tipo": "s", "servicio": "Chess.com", "tarjeta": "Chess.com Chess.com", "frec": "anual", "monto": 21.56, "moneda": "USD", "ultimo": "2025-11-15", "medio": "Visa BBVA", "rubro": "Ajedrez", "persona": "Mati", "match": "chess\\.com", "nota": "Un solo cobro en los resúmenes: supongo que es anual.", "estado": "activa"}, {"id": "x", "tipo": "s", "servicio": "X Premium", "tarjeta": "X CORP. PAID FEATURES", "frec": "anual", "monto": 20, "moneda": "USD", "ultimo": "2026-02-26", "medio": "Visa BBVA", "rubro": "Suscripciones", "persona": "Mati", "match": "x corp|x premium|twitter", "nota": "Un solo cobro. Si era mensual, ya no se renueva; si es anual, vuelve en feb-27.", "estado": "activa"}, {"id": "medicus", "tipo": "d", "servicio": "Medicus (prepaga)", "tarjeta": "MEDICUS SA DEB A", "frec": "mensual", "monto": 264453.14, "moneda": "ARS", "ultimo": "2026-09-24", "medio": "Visa BBVA", "rubro": "Prepaga", "persona": "Mati", "match": "medicus", "nota": "Se debita entre el 19 y el 25.", "estado": "activa"}, {"id": "osde", "tipo": "d", "servicio": "OSDE (prepaga de Cami)", "tarjeta": "OSDE", "frec": "mensual", "monto": 219117, "moneda": "ARS", "ultimo": "2026-09-02", "medio": "Visa BBVA", "rubro": "Prepaga", "persona": "Cami", "match": "osde", "nota": "La paga Cami (te transfiere). Se debita entre el 2 y el 6.", "estado": "activa"}, {"id": "claro", "tipo": "d", "servicio": "Claro (celular)", "tarjeta": "CLARO DEB AUT (antes CP*FACTURAS CLARO)", "frec": "mensual", "monto": 15862, "moneda": "ARS", "ultimo": "2026-09-18", "medio": "Visa BBVA", "rubro": "Celular", "persona": "Mati", "match": "claro", "nota": "Se debita entre el 15 y el 19.", "estado": "activa"}, {"id": "iplan", "tipo": "d", "servicio": "Iplan (internet)", "tarjeta": "MERPAGO*IPLAN (antes IPLAN NETWORKS)", "frec": "mensual", "monto": 55196.69, "moneda": "ARS", "ultimo": "2026-09-15", "medio": "Visa BBVA", "rubro": "Servicios", "persona": "Compartido", "match": "iplan", "nota": "Se debita entre el 15 y el 19.", "estado": "activa"}, {"id": "edesur", "tipo": "d", "servicio": "Edesur (luz)", "tarjeta": "EDESUR DEB AUT", "frec": "mensual", "monto": 20646.78, "moneda": "ARS", "ultimo": "2026-09-14", "medio": "Visa BBVA", "rubro": "Servicios", "persona": "Compartido", "match": "edesur", "nota": "Se debita entre el 12 y el 20.", "estado": "activa"}, {"id": "aysa", "tipo": "d", "servicio": "AySA (agua)", "tarjeta": "AGUA Y SANEAMIEN", "frec": "mensual", "monto": 42007.58, "moneda": "ARS", "ultimo": "2026-09-07", "medio": "Visa BBVA", "rubro": "Servicios", "persona": "Compartido", "match": "aysa|agua y saneam", "nota": "Se debita entre el 6 y el 13.", "estado": "activa"}, {"id": "abl", "tipo": "d", "servicio": "ABL", "tarjeta": "ABL 2383793 … (antes INMOBILIARIO /ABL)", "frec": "mensual", "monto": 33776.11, "moneda": "ARS", "ultimo": "2026-09-02", "medio": "Visa BBVA", "rubro": "Servicios", "persona": "Compartido", "match": "\\babl\\b", "nota": "Se debita entre el 2 y el 10.", "estado": "activa"}, {"id": "metrogas", "tipo": "d", "servicio": "Metrogas (gas)", "tarjeta": "METROGAS SA DEB", "frec": "mensual", "monto": 8948.93, "moneda": "ARS", "ultimo": "2026-09-02", "medio": "Visa BBVA", "rubro": "Servicios", "persona": "Compartido", "match": "metrogas", "nota": "Se debita entre el 2 y el 6.", "estado": "activa"}];
 const FRECS={mensual:1,bimestral:2,trimestral:3,semestral:6,anual:12};
 function subsItems(){return S.subsDoc?S.subsDoc.items:(_YO()==="Mati"?structuredClone(SUBS_SEED):[])}
-async function guardarSubs(items){S.subsDoc={items};try{await S.db.doc("config/suscripciones").set({items})}catch(e){toast("No se guardó: "+(e.message||e.code));throw e}}
+async function guardarSubs(items){S.subsDoc={items,v10:true};try{await S.db.doc("config/suscripciones").set({items,v10:true,actualizado:Date.now()})}catch(e){toast("No se guardó: "+(e.message||e.code));throw e}}
 function sumarMeses(f,k){const[y,m,d]=f.split("-").map(Number);const u=new Date(y,m-1+k+1,0).getDate();const x=new Date(y,m-1+k,Math.min(d,u));return isoDate(x)}
 // último pago: el mayor entre lo guardado y un gasto de la app cuya descripción coincide
 function subUltimo(s){let u={fecha:s.ultimo,monto:s.monto,moneda:s.moneda,desdeApp:false};let re=null;try{re=s.match?new RegExp(s.match,"i"):null}catch{}
@@ -748,11 +839,14 @@ function cardProximos(){const xs=proximosCobros(3);if(!xs.length)return "";
 
 
 // ================= papelera =================
-function vPapelera(){const xs=enPapelera();
-  return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Papelera</h2></header>
-  <p class="small muted" style="margin:0">Lo que borraste. No cuenta en ningún total. Tocá un movimiento para verlo entero, recuperarlo o eliminarlo para siempre.</p>
-  <div class="card" style="padding-block:6px">${xs.length?xs.map(x=>`<div class="papel">${movRow({...x,archivado:false}).replace(/data-edit="[^"]*"/,`data-papel="${esc(x.mes)}|${esc(x.id)}"`)}</div>`).join(""):`<div class="state">La papelera está vacía.</div>`}</div>
-  ${xs.length?(S.confirmVaciar?`<div class="confirm">¿Vaciar la papelera? Se eliminan para siempre ${xs.length} movimiento${xs.length>1?"s":""}, en todos tus dispositivos. No se puede deshacer.<div class="row"><button type="button" class="danger" data-act="vaciarSi">Vaciar</button><button type="button" data-act="vaciarNo">No</button></div></div>`:`<button type="button" class="danger" data-act="vaciar">Vaciar papelera</button>`):""}
+function vPapelera(){const xs=enPapelera();const sel=S.papelSel||(S.papelSel=new Set());
+  [...sel].forEach(k=>{if(!papelPorId(k))sel.delete(k)});const n=sel.size;
+  return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Papelera</h2>${xs.length?`<button type="button" class="ghost" data-act="papelTodos">${n===xs.length?"Ninguno":"Marcar todos"}</button>`:""}</header>
+  <p class="small muted" style="margin:0">Lo que borraste. No cuenta en ningún total. Marcá los que quieras recuperar o eliminar, o tocá uno para verlo entero.</p>
+  <div class="card" style="padding-block:6px">${xs.length?xs.map(x=>{const k=x.mes+"|"+x.id;return `<div class="papel"><label class="psel" aria-label="Seleccionar"><input type="checkbox" data-psel="${esc(k)}" ${sel.has(k)?"checked":""}></label><div style="flex:1;min-width:0">${movRow({...x,archivado:false}).replace(/data-edit="[^"]*"/,`data-papel="${esc(k)}"`)}</div></div>`}).join(""):`<div class="state">La papelera está vacía.</div>`}</div>
+  ${n?(S.confirmElimSel?`<div class="confirm">¿Eliminar para siempre ${n} movimiento${n>1?"s":""}, en todos tus dispositivos? No se puede deshacer.<div class="row"><button type="button" class="danger" data-act="elimSelSi">Eliminar</button><button type="button" data-act="elimSelNo">No</button></div></div>`
+    :`<div class="row"><button type="button" class="primary" data-act="recupSel">Recuperar ${n}</button><button type="button" class="danger" data-act="elimSel">Eliminar ${n} para siempre</button></div>`)
+   :(xs.length?(S.confirmVaciar?`<div class="confirm">¿Vaciar la papelera? Se eliminan para siempre ${xs.length} movimiento${xs.length>1?"s":""}, en todos tus dispositivos. No se puede deshacer.<div class="row"><button type="button" class="danger" data-act="vaciarSi">Vaciar</button><button type="button" data-act="vaciarNo">No</button></div></div>`:`<button type="button" class="danger" data-act="vaciar">Vaciar papelera</button>`):"")}
   <p class="small muted" style="margin:0">Muestra lo borrado en los meses que la app tiene abiertos (el actual y el anterior).</p>`}
 function vPapelItem(p){const x=papelPorId(p.k);if(!x)return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Papelera</h2></header><div class="card state">Ya no está en la papelera.</div>`;
   const fila=(a,b)=>b==null||b===""?"":`<div class="trow"><div class="h"><span>${esc(a)}</span><span>${esc(b)}</span></div></div>`;
@@ -770,10 +864,10 @@ function render(full){if(!S.ready)return;
   const a=document.activeElement;if(!full&&a&&a.id&&/^(i|c|t|a|h|p|s)[A-Z]/.test(a.id)&&a.tagName!=="BUTTON")return;
   if(scr().name==="cargar"&&!full)leerForm();
   S._sl=null;const s=scr();
-  const V={inicio:vInicio,cuentas:vCuentas,topes:vTopes,mas:vMas,cargar:vCargar,lista:vLista,cuenta:vCuenta,cuentaEdit:vCuentaEdit,transfer:vTransfer,ajuste:vAjuste,habituales:vHabituales,habEdit:vHabEdit,ajustes:vAjustes,movSimple:vMovSimple,papelera:vPapelera,papelItem:vPapelItem,subs:vSubs,subEdit:vSubEdit,sync:vSync};
+  const V={inicio:vInicio,cuentas:vCuentas,topes:vTopes,mas:vMas,cargar:vCargar,lista:vLista,cuenta:vCuenta,cuentaEdit:vCuentaEdit,transfer:vTransfer,ajuste:vAjuste,habituales:vHabituales,habEdit:vHabEdit,ajustes:vAjustes,pagos:vPagos,actividad:vActividad,movSimple:vMovSimple,papelera:vPapelera,papelItem:vPapelItem,subs:vSubs,subEdit:vSubEdit,sync:vSync};
   $("#view").innerHTML=(V[s.name]||vInicio)(s);
-  $("#fab").hidden=!["inicio","cuentas","topes"].includes(s.name);
-  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===S.tab?"page":"false"))}
+  $("#fab").hidden=!["inicio","cuentas","topes","pagos"].includes(s.name);
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===S.tab?"page":"false"));navSync()}
 function abrirCargar(form,editing){S.form=form||nuevoForm();S.editing=editing||null;S.calc=false;S.showAllRub=false;S.otraFecha=false;S.pickCuenta=false;S.confirmArch=false;S.confirmBorrar=false;go("cargar")}
 
 // ================= eventos =================
@@ -796,9 +890,9 @@ $("#view").addEventListener("click",async e=>{const t=e.target.closest("button")
   if(d.edit){const[m,id]=d.edit.split("|");const x=movsDe(m).find(y=>y.id===id);if(!x)return;
     if(x.tipo==="transferencia"||x.tipo==="ajuste"){S.editing=x;return go("movSimple")}
     return abrirCargar(formDesdeMov(x),x)}
-  if(d.habOk){const h=S.hab.items.find(x=>x.id===d.habOk);if(!h)return;try{const m=movDesdeHab(h,+h.monto);subMes(m.mes);await S.db.collection(`meses/${m.mes}/movs`).doc().set(m);toast(`${h.desc} cargado`)}catch(err){toast("No se guardó: "+(err.message||err.code))}return}
-  if(d.habEdit){const h=S.hab.items.find(x=>x.id===d.habEdit);if(!h)return;const fm=nuevoForm();Object.assign(fm,{monto:String(h.monto),desc:h.desc,rubro:h.rubro,persona:h.persona,cuenta:h.cuenta,fecha:fechaHab(h),touchedRubro:true,touchedPersona:true,habitual:h.id});return abrirCargar(fm)}
-  if(d.habSkip){S.hab.saltados=[...S.hab.saltados,d.habSkip+"@"+mesDe(hoyISO())];try{await guardarHab();toast("Salteado este mes")}catch{}render(true);return}
+  if(d.habOk){const[hid,hf]=d.habOk.split("@");const h=S.hab.items.find(x=>x.id===hid);if(!h)return;try{const m=movDesdeHab(h,+h.monto,hf);subMes(m.mes);await S.db.collection(`meses/${m.mes}/movs`).doc().set(m);toast(`${h.desc} cargado`)}catch(err){toast("No se guardó: "+(err.message||err.code))}return}
+  if(d.habEdit){const[hid,hf]=d.habEdit.split("@");const h=S.hab.items.find(x=>x.id===hid);if(!h)return;const fm=nuevoForm();Object.assign(fm,{monto:String(h.monto),desc:h.desc,rubro:h.rubro,persona:h.persona,cuenta:h.cuenta,fecha:hf||fechaHab(h),touchedRubro:true,touchedPersona:true,habitual:h.id});return abrirCargar(fm)}
+  if(d.habSkip){S.hab.saltados=[...S.hab.saltados,d.habSkip].slice(-200);try{await guardarHab();toast("Salteado")}catch{}render(true);return}
   if(d.color&&S.ce){leerCta();S.ce.color=d.color;return render(true)}
   if(d.dsug!==undefined&&S.form){leerForm();S.form.desc=d.dsug;if(!S.form.touchedRubro){const sg=suggest(d.dsug);S.form.rubro=sg?sg.rubro:null;if(!S.form.touchedPersona)S.form.persona=sg?(sg.persona||personaDef(sg.rubro)):null}render(true);const b=document.getElementById("descSug");if(b)b.hidden=true;return}
   if(d.sube){S.se=null;return go("subEdit",{id:d.sube})}
@@ -829,6 +923,11 @@ $("#view").addEventListener("click",async e=>{const t=e.target.closest("button")
   if(act==="archivar"){leerForm();S.confirmArch=true;return render(true)}
   if(act==="archNo"){leerForm();S.confirmArch=false;return render(true)}
   if(act==="borrar"){leerForm();S.confirmBorrar=true;S.confirmArch=false;return render(true)}
+  if(act==="papelTodos"){const xs=enPapelera();const all=S.papelSel&&S.papelSel.size===xs.length;S.papelSel=new Set(all?[]:xs.map(x=>x.mes+"|"+x.id));S.confirmElimSel=false;return render(true)}
+  if(act==="recupSel"){const ks=[...(S.papelSel||[])];try{for(const k of ks){const[m,id]=k.split("|");await S.db.doc(`meses/${m}/movs/${id}`).update({archivado:false,borrado:null,actualizado:Date.now()})}toast(`Recuperados: ${ks.length}`)}catch(err){toast("No se pudo: "+(err.message||err.code))}S.papelSel=new Set();return render(true)}
+  if(act==="elimSel"){S.confirmElimSel=true;return render(true)}
+  if(act==="elimSelNo"){S.confirmElimSel=false;return render(true)}
+  if(act==="elimSelSi"){const xs=[...(S.papelSel||[])].map(papelPorId).filter(Boolean);try{await eliminarDef(xs);toast(`Eliminados para siempre: ${xs.length}`)}catch(err){toast("No se pudo: "+(err.message||err.code))}S.papelSel=new Set();S.confirmElimSel=false;return render(true)}
   if(act==="vaciar"){S.confirmVaciar=true;return render(true)}
   if(act==="vaciarNo"){S.confirmVaciar=false;return render(true)}
   if(act==="vaciarSi"){const xs=enPapelera();try{await eliminarDef(xs);toast(`Papelera vaciada (${xs.length})`)}catch(err){toast("No se pudo: "+(err.message||err.code))}S.confirmVaciar=false;return render(true)}
@@ -857,6 +956,7 @@ $("#view").addEventListener("focusin",e=>{if(e.target.id==="iDesc"){paintSug();c
 $("#view").addEventListener("focusout",e=>{if(e.target.id==="iDesc")setTimeout(()=>{if(document.activeElement&&document.activeElement.id==="iDesc")return;const b=document.getElementById("descSug");if(b)b.hidden=true},150)});
 $("#view").addEventListener("pointerdown",e=>{if(e.target.closest("[data-dsug]"))e.preventDefault()});
 $("#view").addEventListener("change",e=>{const id=e.target.id;
+  if(e.target.dataset&&e.target.dataset.psel!==undefined){const k=e.target.dataset.psel;S.papelSel=S.papelSel||new Set();e.target.checked?S.papelSel.add(k):S.papelSel.delete(k);S.confirmElimSel=false;return render(true)}
   if(id==="iArch"){S.showArch=e.target.checked;return render(true)}
   if(S.form&&scr().name==="cargar"&&["iCuotas","iComp","iFecha"].includes(id)){leerForm();if(id==="iComp")S.form.compartida=e.target.checked;return render(true)}
   if((id==="tDesde"||id==="tHacia")&&S.tf){leerTf();return render(true)}});
@@ -881,10 +981,11 @@ $("#view").addEventListener("submit",async e=>{e.preventDefault();const id=e.tar
     if(c.saldoInicial!=null&&!isFinite(c.saldoInicial))return toast("El saldo no es un número.");
     const{_nueva,...limpia}=c;const all=cuentas(true);S.config.cuentasV2=_nueva?[...all,limpia]:all.map(x=>x.id===c.id?limpia:x);
     try{await guardarConfig();toast("Cuenta guardada")}catch{return}S.ce=null;return back()}
-  if(id==="fHab"){const h=S.he;h.desc=g("hDesc").value.trim();h.monto=evalMonto(g("hMonto").value);h.dia=Math.min(31,Math.max(1,+g("hDia").value||1));h.rubro=g("hRubro").value;h.persona=g("hPers").value;h.cuenta=g("hCta").value;
+  if(id==="fHab"){const h=S.he;h.desc=g("hDesc").value.trim();h.monto=evalMonto(g("hMonto").value);h.dia=Math.min(31,Math.max(1,+g("hDia").value||1));h.frec=g("hFrec").value;h.dsem=+g("hDsem").value;h.rubro=g("hRubro").value;h.persona=g("hPers").value;h.cuenta=g("hCta").value;
     if(!h.desc||!(h.monto>0))return toast("Poné descripción y monto.");const{_nuevo,...l}=h;S.hab.items=_nuevo?[...S.hab.items,l]:S.hab.items.map(x=>x.id===h.id?l:x);
     try{await guardarHab();toast("Guardado")}catch{return}S.he=null;return back()}
-  if(id==="fAj"){const n=i=>+g(i).value;S.config.params={sueldoUsd:n("pSueldo"),tc:n("pTc"),cami:n("pCami"),spyUsd:n("pSpy"),viajeUsd:n("pViaje"),ahorroPct:n("pAhorro"),imprevPct:n("pImprev")};try{await guardarConfig();toast("Ajustes guardados")}catch{}}
+  if(id==="fAj"){const n=i=>{const v=evalMonto(g(i).value);return isFinite(v)&&v>=0?v:null};const o={salidas:n("tSalidas"),comida:n("tComida"),joda:n("tJoda"),bajon:n("tBajon"),flores:n("tFlores"),floresExtra:n("tFloresX"),eventuales:n("tEvent"),ropaTrim:n("tRopa")};
+    if(Object.values(o).some(v=>v==null))return toast("Revisá los montos.");S.config.topesMati=o;try{await guardarConfig();toast("Topes guardados")}catch{return}return back()}
 });
 // transferencias y ajustes: vista simple con archivar
 function vMovSimple(){const x=S.editing;if(!x)return "";
@@ -900,8 +1001,10 @@ function vMovSimple(){const x=S.editing;if(!x)return "";
   db.doc("config/app").onSnapshot(s=>{if(s.exists){const d=s.data();S.config={...structuredClone(DEF_CONFIG),...structuredClone(d),params:{...DEF_CONFIG.params,...(d.params||{})}};ensureSubs()}render(false)});
   db.doc("config/memo").onSnapshot(s=>{if(s.exists)S.memo=(s.data().items||[]).map(x=>[x.k,x.r,x.p])});
   db.doc("config/descs").onSnapshot(s=>{if(s.exists)S.descs=structuredClone(s.data().items||{})});
-  db.doc("config/suscripciones").onSnapshot(s=>{if(s.exists)S.subsDoc={items:structuredClone(s.data().items||[])};render(false)});
-  db.doc("config/habituales").onSnapshot(s=>{if(s.exists){const d=s.data();S.hab={items:structuredClone(d.items||[]),saltados:[...(d.saltados||[])]}}render(false)});
+  db.doc("config/suscripciones").onSnapshot(s=>{if(s.exists)S.subsDoc={items:structuredClone(s.data().items||[]),v10:!!s.data().v10};render(false)});
+  db.doc("config/habituales").onSnapshot(s=>{if(s.exists){const d=s.data();S.hab={items:structuredClone(d.items||[]),saltados:[...(d.saltados||[])],v10:!!d.v10}}render(false)});
+  try{history.replaceState({d:0},"")}catch{}
+  setTimeout(migrarV10,2500);setTimeout(migrarV10,20000);
   ensureSubs();S.ready=true;render(true);
   Sync.start();
 })();

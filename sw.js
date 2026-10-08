@@ -1,5 +1,5 @@
 // Caja Mati: guarda la app para que abra sin internet. Cambiar VERSION en cada publicación.
-const VERSION="caja-mati-v7";
+const VERSION="caja-mati-v10";
 const APP=["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(VERSION).then(c=>c.addAll(APP)).then(()=>self.skipWaiting()))});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==VERSION&&k!=="fonts").map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
