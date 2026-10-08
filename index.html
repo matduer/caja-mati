@@ -690,15 +690,30 @@ function vMas(){
    <li>El botón atrás del celular vuelve a la pantalla anterior.</li>
    <li>En el monto podés escribir cuentas, por ejemplo 1500+2300.</li></ul></div>`}
 // ================= Pagos: suscripciones y pagos habituales =================
-function vPagos(){const pend=pendientes(),prox=proximos(),cob=proximosCobros(31);const subsAct=subsItems().filter(s=>s.estado!=="cancelada"&&s.tipo!=="d");
+// Pagos agrupados: junta suscripciones/débitos y pagos habituales (sin repetir los que están en las dos listas).
+const GRUPO_PAGO=[["Suscripciones",["Suscripciones","Ajedrez"]],["Servicios",["Servicios","Celular","Limpieza"]],["Salud",["Prepaga","Terapia","Salud","Gimnasio"]],["Impuestos",["Monotributo"]],["Vivienda",["Alquiler","Caja de seguridad"]]];
+function grupoPago(r){const g=GRUPO_PAGO.find(([,rs])=>rs.includes(r));return g?g[0]:"Otros"}
+function pagosAgrupados(){const tc=S.config.params.tc||1600;const out=[];const hoy=hoyISO();const est=estadoHab();
+  const habs=S.hab.items.filter(h=>h.activo);
+  for(const h of habs){const occ=est.filter(o=>o.id===h.id);const prox=occ.find(o=>!o.hecho&&!o.salteado&&o.fecha>=hoy);const hecho=occ.length&&occ.every(o=>o.hecho||o.salteado);
+    out.push({nombre:h.desc,rubro:h.rubro,mes:h.frec==="semanal"?h.monto*4.33:+h.monto,monto:+h.monto,moneda:"ARS",cuando:cuandoHab(h)+(prox?` · próximo ${fCorta(prox.fecha)}`:hecho?" · listo este mes":""),habe:h.id,k:palabraClave(h.desc)})}
+  for(const s of subsItems().filter(s=>s.estado!=="cancelada")){const k=palabraClave(s.servicio);const c=subCalc(s);
+    const ya=out.find(o=>o.k===k);if(ya){ya.sube=s.id;if(c.prox&&!ya.cuando.includes("próximo"))ya.cuando+=` · próximo ${fCorta(c.prox)}`;continue}
+    const ars=s.moneda==="USD"?+s.monto*tc:+s.monto;const per=FRECS[s.frec]||1;
+    out.push({nombre:s.servicio,rubro:s.rubro,mes:ars/per,monto:+s.monto,moneda:s.moneda,cuando:(s.frec==="mensual"?"mensual":s.frec)+(c.prox?` · próximo ${fCorta(c.prox)}`:""),sube:s.id,k})}
+  const grupos=[...GRUPO_PAGO.map(g=>g[0]),"Otros"].map(g=>({g,xs:out.filter(o=>grupoPago(o.rubro)===g)})).filter(x=>x.xs.length);
+  grupos.forEach(x=>{x.xs.sort((a,b)=>b.mes-a.mes);x.total=x.xs.reduce((a,o)=>a+o.mes,0)});return grupos}
+function vPagos(){const pend=pendientes();const G=pagosAgrupados();const tot=G.reduce((a,x)=>a+x.total,0);
   return `<header class="top"><h1>Pagos</h1></header>
   ${pend.length?`<div class="pend"><b class="small">Pagos habituales para confirmar</b>${pend.map(p=>`<div class="it"><span>${esc(p.desc)} · ${esc(fCorta(p.fecha))} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.occ}">Cargar</button><button type="button" data-hab-edit="${p.occ}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.occ}">Saltear</button></div>`).join("")}</div>`:""}
+  <div class="balance"><span>Pagos fijos por mes (aprox.)</span><b class="num">${esc(fmt(tot))}</b></div>
+  ${G.map(x=>`<div class="card" style="padding-block:6px"><div class="h" style="display:flex;justify-content:space-between;align-items:baseline;padding-top:8px"><h3>${esc(x.g)}</h3><span class="small num">${esc(fmt(x.total))}/mes</span></div>
+   ${x.xs.map(o=>`<button type="button" class="cat" ${o.habe?`data-habe="${o.habe}"`:`data-sube="${esc(o.sube)}"`}>${ico(o.rubro)}<span class="n">${esc(o.nombre)}<br><small class="muted">${esc(o.cuando)}</small></span><span class="m">${esc(fmt(o.monto,o.moneda))}</span></button>`).join("")}</div>`).join("")}
   <div class="card menu" style="padding-block:4px">
-   <button type="button" data-go="subs"><span>Suscripciones</span><small>${subsAct.length} activas${(()=>{const r=subsItems().filter(s=>s.estado==="revisar").length;return r?" · "+r+" para dar de baja":""})()}</small></button>
-   <button type="button" data-go="habituales"><span>Pagos habituales</span><small>${pend.length?pend.length+" para confirmar":S.hab.items.filter(h=>h.activo).length+" activos"}</small></button>
+   <button type="button" data-go="subs"><span>Administrar suscripciones y débitos</span><small>${subsItems().filter(s=>s.estado!=="cancelada").length} activos</small></button>
+   <button type="button" data-go="habituales"><span>Administrar pagos habituales</span><small>${S.hab.items.filter(h=>h.activo).length} activos</small></button>
   </div>
-  ${cob.length?`<div class="card" style="gap:6px"><h3>Próximos cobros de suscripciones</h3>${cob.map(x=>`<div class="small" style="display:flex;justify-content:space-between;gap:8px"><span>${esc(x.s.servicio)} · ${cuando(x.c.prox)}</span><span class="num">${esc(fmt(+x.s.monto,x.s.moneda))}</span></div>`).join("")}</div>`:""}
-  ${prox.length?`<div class="card" style="gap:6px"><h3>Pagos habituales que faltan este mes</h3>${prox.map(h=>`<div class="small" style="display:flex;justify-content:space-between;gap:8px"><span>${esc(h.desc)} · ${esc(fCorta(h.fecha))}</span><span class="num">${esc(fmt(+h.monto))}</span></div>`).join("")}</div>`:""}`}
+  <p class="small muted" style="margin:0">Junta las suscripciones y los pagos habituales. Los semanales cuentan ×4,33; los anuales, ÷12; los en dólares, al dólar de la proyección.</p>`}
 // ================= Actividad =================
 // Se arma con las marcas que ya tiene cada movimiento (creado, actualizado, borrado, eliminado), así se ve igual en todos los dispositivos.
 function vActividad(){const hoy=hoyISO(),m0=mesDe(hoy);needMeses([m0,addMes(m0,-1),addMes(m0,-2)]);
