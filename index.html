@@ -635,6 +635,23 @@ async function migrarV10(){if(YO()!=="Mati")return;try{const hoy=hoyISO();
       return s});
     await guardarSubs(items)}
   render(false)}catch(e){}}
+// ================= v12: caja de ahorro BBVA y tarjeta Visa BBVA separadas (una sola vez, 9/10/2026) =================
+// BBVA = caja de ahorro (tiene que coincidir con el home banking). Visa BBVA = lo que se debe de la tarjeta (negativo).
+// Pagar el resumen = transferencia BBVA → Visa BBVA. Saldos tomados del home banking del 8/10 (USD al dólar del resumen 1/10: 1.517).
+let _m12=false;
+async function migrarV12(){if(_m12||YO()!=="Mati"||S.config.v12||!S.config.cuentasV2||S.movs["2026-10"]===undefined)return;_m12=true;try{
+  const cs=cuentas(true);let all=cs.map(c=>c.nombre==="BBVA"?{...c,saldoInicial:376619.78,desde:"2026-10-08"}:c);
+  if(!cs.some(c=>c.nombre==="Visa BBVA"))all.push({id:"c12",nombre:"Visa BBVA",color:"#1F4E9C",moneda:"ARS",incluir:true,saldoInicial:-621601.86,desde:"2026-10-08",archivada:false});
+  S.config.cuentasV2=all;S.config.v12=true;await guardarConfig();
+  for(const x of (S.movs["2026-10"]||[]))if(x.tipo==="gasto"&&x.cuenta==="BBVA"&&!x.eliminado)await S.db.doc(`meses/2026-10/movs/${x.id}`).update({cuenta:"Visa BBVA",actualizado:Date.now()});
+  S.hab={...S.hab,items:S.hab.items.map(h=>h.cuenta==="BBVA"?{...h,cuenta:"Visa BBVA"}:h)};await guardarHab();
+  const add=[["v12-ley0810","2026-10-08","BBVA",10353.58,"Impuesto ley 25.413 (débitos)","Servicios","Compartido",null],
+    ["v12-ley0910","2026-10-09","BBVA",9382.69,"Impuesto ley 25.413 (créditos)","Servicios","Compartido",null],
+    ["v12-aysa","2026-10-06","Visa BBVA",43976.35,"AySA","Servicios","Compartido","h6"],
+    ["v12-canva","2026-10-06","Visa BBVA",10285,"Canva (último cobro)","Suscripciones","Mati",null]];
+  for(const[id,f,c,mo,d,r,p,hab] of add){if((S.movs["2026-10"]||[]).some(x=>x.id===id))continue;
+    await S.db.doc(`meses/2026-10/movs/${id}`).set({tipo:"gasto",fecha:f,mes:"2026-10",cuenta:c,moneda:"ARS",monto:mo,desc:d,rubro:r,persona:p,grupo:RUBROS[r],archivado:false,origen:"app",nota:"Cargado por Claude desde el home banking",compartida:null,...(hab?{habitual:hab}:{}),creado:Date.now(),actualizado:Date.now()})}
+  toast("Listo: la tarjeta ahora es la cuenta Visa BBVA");render(false)}catch(e){_m12=false}}
 // ================= Topes (solo Mati) =================
 // Montos de la pestaña "Proyección nueva (oct-26)" de la planilla. Se cambian en Topes → Ajustar topes.
 const DEF_TOPES={comida:70000,salidas:130000,joda:20000,bajon:25000,flores:70000,floresExtra:70000,eventuales:200000,ropaTrim:270000};
@@ -845,7 +862,7 @@ async function subGuardar(){leerSub();const s=S.se;if(!s.servicio)return toast("
   const{_nuevo,...l}=s;const xs=subsItems();const items=_nuevo?[...xs,l]:xs.map(x=>x.id===s.id?l:x);try{await guardarSubs(items);toast("Guardado")}catch{return}S.se=null;back()}
 async function subBaja(){leerSub();const s=S.se;const vuelve=s.estado==="cancelada";const items=subsItems().map(x=>x.id===s.id?{...x,...(({_nuevo,...r})=>r)(s),estado:vuelve?"activa":"cancelada",baja:vuelve?null:hoyISO()}:x);
   try{await guardarSubs(items);toast(vuelve?"Activa de nuevo":"Pasó a dadas de baja")}catch{return}S.se=null;back()}
-function subPagar(id){const s=subsItems().find(x=>x.id===id);if(!s)return;const fm=nuevoForm();const c=cuentaPorNombre(s.medio==="Visa BBVA"?"BBVA":s.medio);
+function subPagar(id){const s=subsItems().find(x=>x.id===id);if(!s)return;const fm=nuevoForm();const c=cuentaPorNombre(s.medio)||cuentaPorNombre(s.medio==="Visa BBVA"?"BBVA":"");
   Object.assign(fm,{desc:s.servicio,monto:String(s.monto).replace(".",","),moneda:s.moneda==="USD"?"USD":"ARS",rubro:s.rubro||"Suscripciones",persona:s.persona||_YO(),touchedRubro:true,touchedPersona:true});
   if(c)fm.cuenta=c.nombre;abrirCargar(fm)}
 function cardProximos(){const xs=proximosCobros(3);if(!xs.length)return "";
@@ -1019,7 +1036,7 @@ function vMovSimple(){const x=S.editing;if(!x)return "";
   db.doc("config/suscripciones").onSnapshot(s=>{if(s.exists)S.subsDoc={items:structuredClone(s.data().items||[]),v10:!!s.data().v10};render(false)});
   db.doc("config/habituales").onSnapshot(s=>{if(s.exists){const d=s.data();S.hab={items:structuredClone(d.items||[]),saltados:[...(d.saltados||[])],v10:!!d.v10}}render(false)});
   try{history.replaceState({d:0},"")}catch{}
-  setTimeout(migrarV10,2500);setTimeout(migrarV10,20000);
+  setTimeout(migrarV10,2500);setTimeout(migrarV10,20000);setTimeout(migrarV12,4000);setTimeout(migrarV12,25000);
   ensureSubs();S.ready=true;render(true);
   Sync.start();
 })();
