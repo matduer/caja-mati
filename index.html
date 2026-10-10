@@ -161,6 +161,11 @@ nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 .chipsync{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;font-size:12px;color:var(--muted);background:var(--surface)}
 .chipsync i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}.cal .wd{font-size:11px;color:var(--muted);text-align:center;padding:2px 0}
+.cal button{border:0;border-radius:8px;background:transparent;padding:5px 0 4px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:14px;color:var(--fg);min-height:40px}
+.cal button small{font-size:9.5px;color:var(--muted);font-family:var(--f-mono)}.cal button.has small{color:var(--accent);font-weight:600}
+.cal button.hoy{outline:1.5px solid var(--accent)}.cal button[aria-pressed="true"]{background:var(--accent-soft)}.cal button.fuera{visibility:hidden}
+.calh{display:flex;justify-content:space-between;align-items:center}.calh button{border:0;background:none;font-size:18px;padding:2px 10px;color:var(--fg)}
 .tline{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted)}
 .tline b{color:var(--fg)}
 .big{font-size:26px;font-weight:800}
@@ -314,7 +319,7 @@ const DEF_CONFIG={cuentas:["BBVA","Santander","Billetera","Cuenta DNI","Fondo Vi
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const SIM={ARS:"$",USD:"US$",EUR:"€"};
-const fmt=(n,mon)=>{const s=(SIM[mon]||"$");const a=Math.abs(n);const dec=a<100&&a%1?2:0;return (n<0?"−":"")+s+a.toLocaleString("es-AR",{minimumFractionDigits:dec,maximumFractionDigits:dec})};
+const fmt=(n,mon)=>{const s=(SIM[mon]||"$");const a=Math.round(Math.abs(n)*100)/100;return (n<0&&a>0?"−":"")+s+a.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})};
 const fmtC=n=>{const a=Math.abs(n);if(a>=1e6)return (n<0?"−":"")+"$"+(a/1e6).toLocaleString("es-AR",{maximumFractionDigits:2})+" M";return fmt(n)};
 function parseMonto(s){s=String(s||"").replace(/[\s$]/g,"");if(!s)return NaN;
   if(s.includes(","))s=s.replace(/\./g,"").replace(",",".");else if(/^\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,"");return parseFloat(s)}
@@ -335,7 +340,10 @@ function addMes(m,k){const[y,mm]=m.split("-").map(Number);const d=new Date(y,mm-
 function addDias(f,k){const d=new Date(f+"T12:00");d.setDate(d.getDate()+k);return isoDate(d)}
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 const nombreMes=m=>{const[y,mm]=m.split("-").map(Number);return cap(new Date(y,mm-1,1).toLocaleDateString("es-AR",{month:"long",year:"numeric"}))};
-const fCorta=f=>new Date(f+"T12:00").toLocaleDateString("es-AR",{day:"numeric",month:"short"});
+const fFecha=f=>{const[y,m,d]=String(f).slice(0,10).split("-");return `${d}/${m}/${y}`};
+const fCorta=fFecha;
+const DIAS=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const fDia=f=>`${DIAS[new Date(f+"T12:00").getDay()]} ${fFecha(f)}`;
 const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim();
 function lunesISO(f){const d=new Date(f+"T12:00");d.setDate(d.getDate()-(d.getDay()+6)%7);return isoDate(d)}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -404,12 +412,12 @@ function totalCuentas(sl){return Object.values(sl).filter(s=>s.c.incluir&&!s.c.a
 
 // ================= período (Inicio) =================
 function rango(){const h=S.home,f=h.ref;
-  if(h.per==="dia")return{desde:f,hasta:addDias(f,1),label:f===hoyISO()?"Hoy":cap(new Date(f+"T12:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"}))};
+  if(h.per==="dia")return{desde:f,hasta:addDias(f,1),label:f===hoyISO()?`Hoy · ${fFecha(f)}`:cap(fDia(f))};
   if(h.per==="semana"){const l=lunesISO(f);return{desde:l,hasta:addDias(l,7),label:`${fCorta(l)} – ${fCorta(addDias(l,6))}`}}
   if(h.per==="anio"){const y=f.slice(0,4);return{desde:`${y}-01-01`,hasta:`${+y+1}-01-01`,label:y}}
   const m=mesDe(f);return{desde:m+"-01",hasta:addMes(m,1)+"-01",label:nombreMes(m)}}
 function periodoMeses(){const r=rango();return mesesEntre(mesDe(r.desde),mesDe(addDias(r.hasta,-1)))}
-function moverPeriodo(k){const h=S.home,f=h.ref;
+function moverPeriodo(k){const h=S.home,f=h.ref;S.calMes=null;
   h.ref=h.per==="dia"?addDias(f,k):h.per==="semana"?addDias(f,7*k):h.per==="anio"?`${+f.slice(0,4)+k}${f.slice(4)}`:addMes(mesDe(f),k)+"-01";ensureSubs();render(true)}
 function movsPeriodo(){const r=rango();return periodoMeses().flatMap(movsDe).filter(x=>!x.archivado&&x.fecha>=r.desde&&x.fecha<r.hasta)}
 function agrupar(xs,tipo){const o={};
@@ -461,11 +469,22 @@ function vInicio(){const h=S.home,r=rango(),xs=movsPeriodo(),sl=saldos();
    <div class="under">${[["gasto","Gastos"],["ingreso","Ingresos"]].map(([k,t])=>`<button type="button" data-htipo="${k}" aria-pressed="${h.tipo===k}">${t}</button>`).join("")}</div>
    <div class="periods">${[["dia","Día"],["semana","Semana"],["mes","Mes"],["anio","Año"]].map(([k,t])=>`<button type="button" data-per="${k}" aria-pressed="${h.per===k}">${t}</button>`).join("")}</div>
    <div class="pnav"><button type="button" data-pmov="-1" aria-label="Anterior">‹</button><strong>${esc(r.label)}</strong><button type="button" data-pmov="1" aria-label="Siguiente">›</button></div>
+   ${h.per!=="anio"?calendario(r,h.tipo):""}
    ${!loaded?`<div class="state">Cargando…</div>`:parts.length?donut(parts,total)+(h.tipo==="gasto"?`<div class="split"><span>Consumo <b>${esc(fmt(cons))}</b></span>${ahorro?`<span>Ahorro e inversión <b>${esc(fmt(ahorro))}</b></span>`:""}</div>`:""):`<div class="state">${futuro?"Período futuro.":`Sin ${h.tipo==="gasto"?"gastos":"ingresos"} en este período.`} Tocá <b>+</b> para cargar.</div>`}
   </div>
   ${parts.length?`<div class="card" style="padding-block:6px"><div>${parts.map(([k,v])=>`<button type="button" class="cat" data-rub="${esc(k)}">${ico(k)}<span class="n">${esc(k)}</span><span class="p">${total?Math.round(v/total*100):0}%</span><span class="m">${esc(fmt(v))}</span></button>`).join("")}</div>
    <button type="button" class="ghost" data-go="lista">Ver todos los movimientos</button></div>`:""}`}
 
+// Calendario del mes: tocar un día lo abre en Inicio (período Día). Muestra lo gastado (o ingresado) cada día.
+const kAbrev=v=>v>=1e6?(Math.round(v/1e5)/10).toLocaleString("es-AR")+"M":v>=1e3?Math.round(v/1e3)+"k":String(Math.round(v));
+function calendario(r,tipo){const m=S.calMes||mesDe(S.home.ref);needMeses([m]);const y=+m.slice(0,4),mm=+m.slice(5);const ult=new Date(y,mm,0).getDate();
+  const off=(new Date(y,mm-1,1).getDay()+6)%7;const hoy=hoyISO();const tot={};
+  movsDe(m).forEach(x=>{if(x.archivado)return;if(tipo==="gasto"?x.tipo==="gasto":(x.tipo==="ingreso"&&x.ingTipo!=="Reintegro"))tot[x.fecha]=(tot[x.fecha]||0)+x.monto});
+  const celdas=[];for(let i=0;i<off;i++)celdas.push(`<button type="button" class="fuera" tabindex="-1" aria-hidden="true"></button>`);
+  for(let d=1;d<=ult;d++){const f=`${m}-${pad(d)}`;const sel=S.home.per!=="mes"&&f>=r.desde&&f<r.hasta;const v=tot[f]||0;
+    celdas.push(`<button type="button" data-cal="${f}" class="${f===hoy?"hoy ":""}${v?"has":""}" aria-pressed="${sel}" aria-label="${esc(fDia(f))}${v?" · "+esc(fmt(v)):""}">${d}<small>${v?kAbrev(v):"&nbsp;"}</small></button>`)}
+  return `${S.home.per==="mes"&&!S.calMes?"":`<div class="calh"><button type="button" data-calmov="-1" aria-label="Mes anterior">‹</button><span class="small"><b>${esc(nombreMes(m))}</b></span><button type="button" data-calmov="1" aria-label="Mes siguiente">›</button></div>`}
+   <div class="cal">${["L","M","M","J","V","S","D"].map(x=>`<span class="wd">${x}</span>`).join("")}${celdas.join("")}</div>`}
 // ================= lista de movimientos =================
 function movRow(x){
   const sl=S._sl||{};let k,meta,sign="",cls="",monto=x.monto,mon="ARS",desc=x.desc;
@@ -477,7 +496,7 @@ function movRow(x){
   return `<button type="button" class="mov ${cls} ${x.archivado?"arch":""}" data-edit="${esc(x.mes)}|${esc(x.id)}">${ico(k)}<div class="d"><div>${esc(desc)}</div><div class="small muted">${meta.filter(Boolean).map(esc).join(" · ")}</div></div><div class="m">${sign}${esc(fmt(monto,mon))}</div></button>`}
 function listaPorDia(xs){const byDay={};xs.sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.creado||0)-(a.creado||0)).forEach(x=>(byDay[x.fecha]=byDay[x.fecha]||[]).push(x));
   return Object.keys(byDay).map(d=>{const tot=byDay[d].filter(x=>x.tipo==="gasto"&&!x.archivado).reduce((s,x)=>s+x.monto,0);
-    return `<div class="day"><span>${esc(new Date(d+"T12:00").toLocaleDateString("es-AR",{weekday:"short",day:"numeric",month:"short"}))}</span><span class="num">${tot?esc(fmt(tot)):""}</span></div>`+byDay[d].map(movRow).join("")}).join("")}
+    return `<div class="day"><span>${esc(cap(fDia(d)))}</span><span class="num">${tot?esc(fmt(tot)):""}</span></div>`+byDay[d].map(movRow).join("")}).join("")}
 function vLista(p){const r=rango();let xs=periodoMeses().flatMap(movsDe).filter(x=>x.fecha>=r.desde&&x.fecha<r.hasta&&(S.showArch||!x.archivado));
   let titulo="Movimientos";
   if(p.rubro){titulo=p.rubro;xs=xs.filter(x=>(S.home.tipo==="gasto"?(x.rubro===p.rubro&&(x.tipo==="gasto"||x.ingTipo==="Reintegro")):(x.tipo==="ingreso"&&x.ingTipo===p.rubro)))}
@@ -504,7 +523,7 @@ function vCargar(){
   const grid=S.showAllRub?GRUPOS.map(g=>`<div class="grp">${g}</div>`+Object.keys(RUBROS).filter(r=>RUBROS[r]===g).map(tile).join("")).join("")+`<button type="button" class="tile" data-act="menosRub"><span class="ico" style="background:var(--sunk);color:var(--fg)">−</span><span>Menos</span></button>`
     :frecuentes(f.rubro).map(tile).join("")+`<button type="button" class="tile" data-act="masRub"><span class="ico" style="background:var(--sunk);color:var(--fg)">+</span><span>Más</span></button>`;
   const h=hoyISO(),dts=[[h,"hoy"],[addDias(h,-1),"ayer"],[addDias(h,-2),"anteayer"]];const otra=!dts.some(([d])=>d===f.fecha);
-  const fd=d=>{const x=new Date(d+"T12:00");return `${x.getDate()}/${x.getMonth()+1}`};
+  const fd=d=>fFecha(d).slice(0,5);
   return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">${ed?"Editar movimiento":"Añadir movimiento"}</h2></header>
   <form class="card" id="fMov" autocomplete="off">
    <div class="under">${[["gasto","Gasto"],["ingreso","Ingreso"]].map(([t,l])=>`<button type="button" data-tipo="${t}" aria-pressed="${f.tipo===t}">${l}</button>`).join("")}</div>
@@ -579,14 +598,19 @@ async function guardar(){
   S.editing=null;S.form=null;S.calc=false;S.showAllRub=false;S.otraFecha=false;back()}
 
 // ================= Cuentas =================
+const SECC=[["cotidiana","Del día a día"],["ahorro","Ahorros"],["otros","Otras"]];
+const seccCta=c=>c.seccion||"cotidiana";
 function vCuentas(){const sl=saldos();const cs=cuentas();const faltan=cs.filter(c=>c.saldoInicial==null);
   return `<header class="top"><h1>Cuentas</h1></header>
   <div class="balance"><span>Total</span><b class="num">${esc(fmt(totalCuentas(sl)))}</b></div>
   <div class="row"><button type="button" data-go="transfer">⇄ Nueva transferencia</button><button type="button" data-go="lista" data-transf="1">Historial de transferencias</button></div>
   ${faltan.length?`<div class="need">Falta el saldo inicial de ${faltan.map(c=>esc(c.nombre)).join(", ")}. Entrá a cada una y cargalo para que el total sea real.</div>`:""}
   <div class="h" style="display:flex;justify-content:flex-end"><button type="button" class="ghost" data-act="ctaOrden">${S.ordenCtas?"Listo":"Ordenar cuentas"}</button></div>
-  ${S.ordenCtas?`<div class="card" style="padding-block:6px">${cs.map((c,i)=>`<div class="cat" style="cursor:default"><span class="ico" style="background:${c.color};font-size:15px;font-weight:700">${esc(c.nombre.charAt(0).toUpperCase())}</span><span class="n">${esc(c.nombre)}</span><span style="display:flex;gap:6px"><button type="button" class="ghost" data-ctamov="${esc(c.id)}|-1" aria-label="Subir ${esc(c.nombre)}" ${i===0?"disabled":""}>↑</button><button type="button" class="ghost" data-ctamov="${esc(c.id)}|1" aria-label="Bajar ${esc(c.nombre)}" ${i===cs.length-1?"disabled":""}>↓</button></span></div>`).join("")}</div>`:
-  `<div class="card" style="padding-block:6px">${cs.map(c=>{const s=sl[c.nombre];return `<button type="button" class="cat" data-cuenta="${esc(c.nombre)}"><span class="ico" style="background:${c.color};font-size:15px;font-weight:700">${esc(c.nombre.charAt(0).toUpperCase())}</span><span class="n">${esc(c.nombre)}${c.incluir?"":` <small class="muted">· fuera del total</small>`}</span><span class="m">${s.ok?esc(fmt(s.v,c.moneda)):`<small class="muted">sin saldo</small>`}</span></button>`}).join("")}</div>`}
+  ${SECC.map(([k,tit])=>{const xs=cs.filter(c=>seccCta(c)===k);if(!xs.length)return "";
+    const sub=xs.filter(c=>c.incluir&&(c.moneda||"ARS")==="ARS").reduce((a,c)=>a+(sl[c.nombre]?sl[c.nombre].v:0),0);
+    return `<div class="card" style="padding-block:6px"><div class="h" style="display:flex;justify-content:space-between;align-items:baseline;padding-top:8px"><h3>${tit}</h3><span class="small num">${esc(fmt(sub))}</span></div>
+    ${S.ordenCtas?xs.map((c,i)=>`<div class="cat" style="cursor:default"><span class="ico" style="background:${c.color};font-size:15px;font-weight:700">${esc(c.nombre.charAt(0).toUpperCase())}</span><span class="n">${esc(c.nombre)}</span><span style="display:flex;gap:6px"><button type="button" class="ghost" data-ctamov="${esc(c.id)}|-1" aria-label="Subir ${esc(c.nombre)}" ${i===0?"disabled":""}>↑</button><button type="button" class="ghost" data-ctamov="${esc(c.id)}|1" aria-label="Bajar ${esc(c.nombre)}" ${i===xs.length-1?"disabled":""}>↓</button></span></div>`).join("")
+     :xs.map(c=>{const s=sl[c.nombre];return `<button type="button" class="cat" data-cuenta="${esc(c.nombre)}"><span class="ico" style="background:${c.color};font-size:15px;font-weight:700">${esc(c.nombre.charAt(0).toUpperCase())}</span><span class="n">${esc(c.nombre)}${c.incluir?"":` <small class="muted">· fuera del total</small>`}</span><span class="m">${s.ok?esc(fmt(s.v,c.moneda)):`<small class="muted">sin saldo</small>`}</span></button>`}).join("")}</div>`}).join("")}
   <button type="button" data-go="cuentaEdit" data-nueva="1">+ Nueva cuenta</button>
   ${cuentas(true).some(c=>c.archivada)?`<p class="small muted" style="margin:0">Cuentas archivadas: ${cuentas(true).filter(c=>c.archivada).map(c=>`<button type="button" class="ghost" data-cuentaedit="${esc(c.nombre)}">${esc(c.nombre)}</button>`).join(" ")}</p>`:""}`}
 function vCuenta(p){const c=cuentaPorNombre(p.cuenta);if(!c)return `<div class="state">No existe esa cuenta.</div>`;const s=saldos()[c.nombre];
@@ -601,6 +625,7 @@ function vCuentaEdit(p){const c=S.ce||(S.ce=p.nueva?{id:"c"+uid(),nombre:"",colo
   <div class="row"><label>Moneda<select id="cMon">${["ARS","USD","EUR"].map(m=>`<option ${m===c.moneda?"selected":""}>${m}</option>`).join("")}</select></label>
   <label>Saldo inicial<input id="cSaldo" inputmode="decimal" value="${c.saldoInicial??""}" placeholder="ej. 283040,30"></label></div>
   <label>Saldo a la fecha (incluye lo de ese día)<input id="cDesde" type="date" value="${esc(c.desde||hoyISO())}"></label>
+  <label>Sección<select id="cSecc">${SECC.map(([k,tt])=>`<option value="${k}" ${seccCta(c)===k?"selected":""}>${tt}</option>`).join("")}</select></label>
   <div><label style="margin-bottom:6px">Color</label><div class="swatches">${COLORES.map(k=>`<button type="button" data-color="${k}" style="background:${k}" aria-pressed="${k===c.color}" aria-label="Color"></button>`).join("")}</div></div>
   <label class="toggle"><input type="checkbox" id="cIncl" ${c.incluir?"checked":""}>Incluir en el total</label>
   <button class="primary" type="submit">Guardar</button>
@@ -654,6 +679,10 @@ async function migrarV12(){if(_m12||YO()!=="Mati"||S.config.v12||!S.config.cuent
   for(const[id,f,c,mo,d,r,p,hab] of add){if((S.movs["2026-10"]||[]).some(x=>x.id===id))continue;
     await S.db.doc(`meses/2026-10/movs/${id}`).set({tipo:"gasto",fecha:f,mes:"2026-10",cuenta:c,moneda:"ARS",monto:mo,desc:d,rubro:r,persona:p,grupo:RUBROS[r],archivado:false,origen:"app",nota:"Cargado por Claude desde el home banking",compartida:null,...(hab?{habitual:hab}:{}),creado:Date.now(),actualizado:Date.now()})}
   toast("Listo: la tarjeta ahora es la cuenta Visa BBVA");render(false)}catch(e){_m12=false}}
+async function migrarV14(){if(YO()!=="Mati"||S.config.v14||!S.config.cuentasV2)return;
+  const A=["Fondo Viaje"],O=["Mercadopago","Bru","Lemon","Dukas","Dukas debit"];
+  S.config.cuentasV2=cuentas(true).map(c=>({...c,seccion:c.seccion||(A.includes(c.nombre)?"ahorro":O.includes(c.nombre)?"otros":"cotidiana")}));
+  S.config.v14=true;try{await guardarConfig()}catch{}render(false)}
 async function migrarV13(){if(YO()!=="Mati"||S.config.v13||!S.config.cuentasV2)return;const all=cuentas(true).slice();
   const v=all.findIndex(c=>c.nombre==="Visa BBVA");if(v<0)return;const[visa]=all.splice(v,1);const b=all.findIndex(c=>c.nombre==="BBVA");all.splice(b+1,0,visa);
   S.config.cuentasV2=all;S.config.v13=true;try{await guardarConfig()}catch{}render(false)}
@@ -752,7 +781,7 @@ function vActividad(){const hoy=hoyISO(),m0=mesDe(hoy);needMeses([m0,addMes(m0,-
   xs.forEach(e=>{const d=isoDate(new Date(e.ts));(porDia[d]=porDia[d]||[]).push(e)});
   return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Actividad</h2></header>
   <p class="small muted" style="margin:0">Lo que se cargó, cambió, archivó o borró en los últimos 45 días, en todos tus dispositivos. De cada movimiento se ve cuándo se cargó y su último cambio.</p>
-  ${xs.length?Object.entries(porDia).map(([d,es])=>`<div class="card" style="padding-block:6px"><h3 style="padding-top:8px">${esc(d===hoy?"Hoy":cap(new Date(d+"T12:00").toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"short"})))}</h3>
+  ${xs.length?Object.entries(porDia).map(([d,es])=>`<div class="card" style="padding-block:6px"><h3 style="padding-top:8px">${esc(d===hoy?"Hoy":cap(fDia(d)))}</h3>
    ${es.map(e=>`<div class="act"><span class="t">${esc(new Date(e.ts).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}))}</span><div class="w"><div class="k ${e.k}">${esc(e.que)}</div><div class="small">${esc(e.desc)}${e.fecha?` <span class="muted">· ${esc(fCorta(e.fecha))}</span>`:""}</div></div><span class="m">${esc(e.monto)}</span></div>`).join("")}</div>`).join("")
    :`<div class="card state">Todavía no hay actividad registrada.</div>`}`}
 function vHabituales(){const pend=pendientes(),prox=proximos();const act=S.hab.items.filter(h=>h.activo),inac=S.hab.items.filter(h=>!h.activo);
@@ -838,8 +867,8 @@ function vSubs(){const xs=subsItems();const act=xs.filter(s=>s.estado!=="cancela
 function vSubEdit(p){const s=S.se||(S.se=p.nuevo?{id:"s"+uid(),tipo:"s",servicio:"",tarjeta:"",frec:"mensual",monto:"",moneda:"ARS",ultimo:hoyISO(),medio:"Visa BBVA",rubro:"Suscripciones",persona:_YO(),match:"",nota:"",estado:"activa",_nuevo:true}:structuredClone(subsItems().find(x=>x.id===p.id)));
   if(!s)return `<div class="state">No existe.</div>`;const c=s._nuevo?null:subCalc(s);
   return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">${s._nuevo?"Nueva suscripción":esc(s.servicio)}</h2></header>
-  ${c?`<div class="card"><div class="trow"><div class="h"><span>Último pago</span><span>${c.u.fecha?esc(fCorta(c.u.fecha)+" "+c.u.fecha.slice(0,4)):"—"}${c.u.desdeApp?" (cargado en la app)":""}</span></div></div>
-   <div class="trow"><div class="h"><span>Próximo cobro</span><span>${c.prox?esc(fCorta(c.prox)+" "+c.prox.slice(0,4))+" · "+cuando(c.prox):"—"}</span></div></div>
+  ${c?`<div class="card"><div class="trow"><div class="h"><span>Último pago</span><span>${c.u.fecha?esc(fFecha(c.u.fecha)):"—"}${c.u.desdeApp?" (cargado en la app)":""}</span></div></div>
+   <div class="trow"><div class="h"><span>Próximo cobro</span><span>${c.prox?esc(fFecha(c.prox))+" · "+cuando(c.prox):"—"}</span></div></div>
    ${c.sinVer.length?`<div class="need">Ya pasó ${c.sinVer.length>1?"las fechas":"la fecha"} ${c.sinVer.map(fCorta).join(", ")} y no lo veo cargado. Si se cobró, cargalo; si no, revisá si sigue activa.</div>`:""}
    ${s.estado!=="cancelada"?`<button type="button" data-subpay="${esc(s.id)}">Cargar este pago como gasto</button>`:""}</div>`:""}
   <form class="card" id="fSub" autocomplete="off">
@@ -890,9 +919,9 @@ function vPapelItem(p){const x=papelPorId(p.k);if(!x)return `<header class="top"
   const tipo=x.tipo==="gasto"?"Gasto":x.tipo==="ingreso"?(x.ingTipo||"Ingreso"):x.tipo==="transferencia"?"Transferencia":"Ajuste de saldo";
   return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">En la papelera</h2></header>
   <div class="card"><div class="balance"><span>${esc(tipo)}</span><b class="num">${esc(fmt(x.moneda==="USD"&&x.montoOrig?x.montoOrig:Math.abs(x.monto),x.moneda==="USD"&&x.montoOrig?"USD":"ARS"))}</b></div>
-   ${fila("Descripción",x.tipo==="transferencia"?`${x.desde} → ${x.hacia}`:x.desc)}${fila("Fecha",new Date(x.fecha+"T12:00").toLocaleDateString("es-AR",{weekday:"short",day:"numeric",month:"long",year:"numeric"}))}
+   ${fila("Descripción",x.tipo==="transferencia"?`${x.desde} → ${x.hacia}`:x.desc)}${fila("Fecha",cap(fDia(x.fecha)))}
    ${fila("Rubro",x.rubro)}${fila("De quién",x.persona)}${fila("Cuenta",x.cuenta)}${x.moneda==="USD"?fila("En pesos",fmt(x.monto)):""}${x.cuota?fila("Cuota",`${x.cuota.n}/${x.cuota.de}`):""}${fila("Nota",x.nota)}
-   ${fila("Borrado el",new Date(x.borrado).toLocaleDateString("es-AR",{day:"numeric",month:"short"})+" "+new Date(x.borrado).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}))}
+   ${fila("Borrado el",fFecha(isoDate(new Date(x.borrado)))+" "+new Date(x.borrado).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}))}
    <button type="button" class="primary" data-recup="${esc(x.mes)}|${esc(x.id)}">Recuperar</button>
    ${S.confirmElim?`<div class="confirm">¿Eliminar este movimiento para siempre, en todos tus dispositivos? No se puede deshacer.<div class="row"><button type="button" class="danger" data-act="elimSi">Eliminar</button><button type="button" data-act="elimNo">No</button></div></div>`:`<button type="button" class="danger" data-act="elim">Eliminar para siempre</button>`}</div>`}
 
@@ -909,7 +938,7 @@ function abrirCargar(form,editing){S.form=form||nuevoForm();S.editing=editing||n
 
 // ================= eventos =================
 document.querySelector("nav.tabs").addEventListener("click",e=>{const b=e.target.closest("button[data-tab]");if(!b)return;S.tab=b.dataset.tab;S.stack=[];S.form=null;S.editing=null;render(true);window.scrollTo(0,0)});
-$("#fab").addEventListener("click",()=>abrirCargar());
+$("#fab").addEventListener("click",()=>{const s=scr();if(s.name==="inicio"&&S.home.per==="dia"){const fm=nuevoForm();fm.fecha=S.home.ref;return abrirCargar(fm)}abrirCargar()});
 function calcKey(k){leerForm();const f=S.form;let v=f.monto||"";
   if(k==="C")v="";else if(k==="⌫")v=v.slice(0,-1);else if(k==="="){const r=evalMonto(v);v=isFinite(r)?String(r).replace(".",","):v}
   else v+=({"−":"-"})[k]||k;f.monto=v;render(true)}
@@ -918,10 +947,12 @@ $("#view").addEventListener("click",async e=>{const t=e.target.closest("button")
   if(d.go){const p={};if(d.transf)p.transf=1;if(d.c)p.c=d.c;if(d.nueva)p.nueva=1;if(d.nuevo)p.nuevo=1;if(d.mesact){S.home.per="mes";S.home.ref=hoyISO();ensureSubs()}
     if(d.go==="cuentaEdit")S.ce=null;if(d.go==="transfer")S.tf=null;if(d.go==="habEdit")S.he=null;if(d.go==="subEdit")S.se=null;return go(d.go,p)}
   if(d.htipo){S.home.tipo=d.htipo;return render(true)}
-  if(d.per){S.home.per=d.per;ensureSubs();return render(true)}
+  if(d.cal){S.home.per="dia";S.home.ref=d.cal;S.calMes=null;ensureSubs();return render(true)}
+  if(d.calmov){S.calMes=addMes(S.calMes||mesDe(S.home.ref),+d.calmov);return render(true)}
+  if(d.per){S.home.per=d.per;S.calMes=null;ensureSubs();return render(true)}
   if(d.pmov)return moverPeriodo(+d.pmov);
   if(d.rub)return go("lista",{rubro:d.rub});
-  if(d.ctamov){const[id,k]=d.ctamov.split("|");const vis=cuentas().map(c=>c.id);const i=vis.indexOf(id),j=i+(+k);if(i<0||j<0||j>=vis.length)return;
+  if(d.ctamov){const[id,k]=d.ctamov.split("|");const yo=cuentas(true).find(c=>c.id===id);const vis=cuentas().filter(c=>seccCta(c)===seccCta(yo)).map(c=>c.id);const i=vis.indexOf(id),j=i+(+k);if(i<0||j<0||j>=vis.length)return;
     const all=cuentas(true).slice();const a=all.findIndex(c=>c.id===id),b=all.findIndex(c=>c.id===vis[j]);[all[a],all[b]]=[all[b],all[a]];
     S.config.cuentasV2=all;try{await guardarConfig()}catch{}return render(true)}
   if(d.cuenta)return go("cuenta",{cuenta:d.cuenta});
@@ -944,7 +975,7 @@ $("#view").addEventListener("click",async e=>{const t=e.target.closest("button")
     if(d.tipo){leerForm();f.tipo=d.tipo;if(f.tipo==="ingreso"){f.moneda="ARS";f.cuotas=1;f.compartida=false}return render(true)}
     if(d.ingtipo){leerForm();f.ingTipo=d.ingtipo;return render(true)}
     if(d.moneda){leerForm();f.moneda=d.moneda;return render(true)}
-    if(d.rubro){leerForm();f.rubro=d.rubro;f.touchedRubro=true;if(!f.touchedPersona)f.persona=personaDef(f.rubro);return render(true)}
+    if(d.rubro){leerForm();f.rubro=d.rubro;f.touchedRubro=true;S.showAllRub=false;if(!f.touchedPersona)f.persona=personaDef(f.rubro);return render(true)}
     if(d.persona){leerForm();f.persona=d.persona;f.touchedPersona=true;return render(true)}
     if(d.fecha){leerForm();f.fecha=d.fecha;S.otraFecha=false;return render(true)}
     if(d.cta){leerForm();f.cuenta=d.cta;S.pickCuenta=false;return render(true)}
@@ -1002,7 +1033,7 @@ $("#view").addEventListener("change",e=>{const id=e.target.id;
   if(S.form&&scr().name==="cargar"&&["iCuotas","iComp","iFecha"].includes(id)){leerForm();if(id==="iComp")S.form.compartida=e.target.checked;return render(true)}
   if((id==="tDesde"||id==="tHacia")&&S.tf){leerTf();return render(true)}});
 function leerTf(){const g=i=>document.getElementById(i);const t=S.tf;if(!t)return;t.desde=g("tDesde").value;t.hacia=g("tHacia").value;t.monto=g("tMonto").value;if(g("tDest"))t.montoDest=g("tDest").value;t.fecha=g("tFecha").value||t.fecha;t.nota=g("tNota").value}
-function leerCta(){const g=i=>document.getElementById(i);const c=S.ce;if(!c||!g("cNombre"))return;c.nombre=g("cNombre").value.trim();c.moneda=g("cMon").value;const s=g("cSaldo").value.trim();c.saldoInicial=s===""?null:evalMonto(s.replace(/^−/,"-"));c.desde=g("cDesde").value||hoyISO();c.incluir=g("cIncl").checked}
+function leerCta(){const g=i=>document.getElementById(i);const c=S.ce;if(!c||!g("cNombre"))return;c.nombre=g("cNombre").value.trim();c.moneda=g("cMon").value;const s=g("cSaldo").value.trim();c.saldoInicial=s===""?null:evalMonto(s.replace(/^−/,"-"));c.desde=g("cDesde").value||hoyISO();c.incluir=g("cIncl").checked;c.seccion=g("cSecc").value}
 $("#view").addEventListener("submit",async e=>{e.preventDefault();const id=e.target.id;const g=i=>document.getElementById(i);
   if(id==="fMov")return guardar();
   if(id==="fSub")return subGuardar();
@@ -1045,7 +1076,7 @@ function vMovSimple(){const x=S.editing;if(!x)return "";
   db.doc("config/suscripciones").onSnapshot(s=>{if(s.exists)S.subsDoc={items:structuredClone(s.data().items||[]),v10:!!s.data().v10};render(false)});
   db.doc("config/habituales").onSnapshot(s=>{if(s.exists){const d=s.data();S.hab={items:structuredClone(d.items||[]),saltados:[...(d.saltados||[])],v10:!!d.v10}}render(false)});
   try{history.replaceState({d:0},"")}catch{}
-  setTimeout(migrarV10,2500);setTimeout(migrarV10,20000);setTimeout(migrarV12,4000);setTimeout(migrarV12,25000);setTimeout(migrarV13,6000);setTimeout(migrarV13,28000);
+  setTimeout(migrarV10,2500);setTimeout(migrarV10,20000);setTimeout(migrarV12,4000);setTimeout(migrarV12,25000);setTimeout(migrarV13,6000);setTimeout(migrarV13,28000);setTimeout(migrarV14,8000);setTimeout(migrarV14,30000);
   ensureSubs();S.ready=true;render(true);
   Sync.start();
 })();
