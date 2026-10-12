@@ -512,7 +512,7 @@ function vLista(p){const r=rango();let xs=periodoMeses().flatMap(movsDe).filter(
   ${p.cuenta||p.transf?"":`<button type="button" class="ghost" data-act="csv">Copiar como CSV</button>`}</div>`}
 
 // ================= Cargar =================
-function nuevoForm(){const c=cuentas()[0];return{tipo:"gasto",moneda:"ARS",monto:"",desc:"",rubro:null,persona:null,cuenta:c?c.nombre:"",fecha:hoyISO(),cuotas:1,compartida:false,total:"",ingTipo:"Sueldo",usd:"",tcGasto:"",nota:"",touchedRubro:false,touchedPersona:false,habitual:null}}
+function nuevoForm(){const c=cuentas()[0];return{tipo:"gasto",moneda:"ARS",monto:"",desc:"",rubro:null,persona:null,cuenta:c?c.nombre:"",fecha:hoyISO(),cuotas:1,compartida:false,total:"",ingTipo:"Sueldo",usd:"",tcGasto:"",dest:"",nota:"",touchedRubro:false,touchedPersona:false,habitual:null}}
 function formDesdeMov(x){return{tipo:x.tipo,moneda:x.moneda||"ARS",monto:String(x.moneda==="USD"?x.montoOrig:(x.compartida?x.compartida.miParte:x.monto)),desc:x.desc,rubro:x.rubro||null,persona:x.persona||null,cuenta:x.cuenta,fecha:x.fecha,cuotas:1,compartida:!!x.compartida,total:x.compartida?String(x.compartida.total):"",ingTipo:x.ingTipo||"Sueldo",usd:x.usd?String(x.usd):"",tcGasto:x.tc?String(x.tc):"",nota:x.nota||"",touchedRubro:true,touchedPersona:true,habitual:x.habitual||null}}
 function frecuentes(sel){const cnt={};todosMovs().forEach(x=>{if(x.tipo==="gasto"&&!x.archivado&&x.creado)cnt[x.rubro]=(cnt[x.rubro]||0)+1});
   let top=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);FRECUENTES_DEF.forEach(r=>{if(!top.includes(r))top.push(r)});top=top.filter(r=>RUBROS[r]).slice(0,7);
@@ -545,6 +545,7 @@ function vCargar(){
     <button type="button" data-act="otraFecha" aria-pressed="${otra}">${otra?fd(f.fecha):"📅"}<small>${otra?"elegida":"otra"}</small></button></div>
     ${otra||S.otraFecha?`<input id="iFecha" type="date" value="${esc(f.fecha)}" style="margin-top:6px" aria-label="Otra fecha">`:""}</div>
    ${!esGasto&&f.ingTipo==="Sueldo"?`<label>USD vendidos<input id="iUsd" inputmode="decimal" placeholder="ej. 500" value="${esc(f.usd)}"></label><div class="hint">El monto de arriba son los pesos que recibiste.</div>`:""}
+   ${esGasto&&!ed&&destAhorro(f.rubro)?`<label>US$ que entran a ${esc(destAhorro(f.rubro))}<input id="iDest" inputmode="decimal" placeholder="${f.moneda==="USD"&&f.monto?esc(f.monto):"ej. 200"}" value="${esc(f.dest)}"></label><div class="hint">El gasto queda como ahorro del mes, igual que siempre. Esto además suma los dólares al saldo de ${esc(destAhorro(f.rubro))}. Dejalo vacío si no querés tocar la cuenta.</div>`:""}
    <div><label>Comentario<input id="iDesc" placeholder="${esGasto?"ej. medialunas con Oppel":"ej. devolución de Juan"}" value="${esc(f.desc)}" autocomplete="off"></label><div class="dsug" id="descSug" hidden></div></div>
    ${esGasto?`<details class="more" ${f.cuotas>1||f.compartida||f.nota||f.moneda==="USD"?"open":""}><summary>Más opciones: cuotas, dólares, salida compartida</summary>
      <div style="display:flex;flex-direction:column;gap:12px">
@@ -565,7 +566,10 @@ function archBloque(ed){
 function leerForm(){const f=S.form;if(!f)return;const g=id=>document.getElementById(id);
   if(g("iMonto"))f.monto=g("iMonto").value;if(g("iDesc"))f.desc=g("iDesc").value;if(g("iFecha")&&g("iFecha").value)f.fecha=g("iFecha").value;
   if(g("iCuotas"))f.cuotas=+g("iCuotas").value;if(g("iTotal"))f.total=g("iTotal").value;
-  if(g("iNota"))f.nota=g("iNota").value;if(g("iUsd"))f.usd=g("iUsd").value;if(g("iTc"))f.tcGasto=g("iTc").value}
+  if(g("iNota"))f.nota=g("iNota").value;if(g("iUsd"))f.usd=g("iUsd").value;if(g("iDest"))f.dest=g("iDest").value;if(g("iTc"))f.tcGasto=g("iTc").value}
+// Compra de SPY o aporte al fondo de viaje: se anota el gasto (ahorro del mes) y, si se indica, se suman los dólares a la cuenta de ahorro.
+const DEST_AHORRO={"Inversión":"Stocks","Fondo de viaje":"Fondo Viaje"};
+const destAhorro=r=>{const n=DEST_AHORRO[r];const c=n&&cuentaPorNombre(n);return c&&!c.archivada&&c.moneda==="USD"?n:null};
 async function guardar(){
   leerForm();const f=S.form;const n=evalMonto(f.monto);
   if(!(n>0))return toast("Poné un monto mayor a cero.");
@@ -583,6 +587,8 @@ async function guardar(){
     if(!S.editing&&f.cuotas>1){const k=f.cuotas,c=Math.round(pesos/k*100)/100,grupo="c"+uid();
       for(let i=0;i<k;i++){const m=addMes(base.mes,i);docs.push({...base,fecha:i===0?f.fecha:`${m}-01`,mes:m,monto:c,cuota:{n:i+1,de:k,total:pesos,grupo},desc:`${base.desc} (cuota ${i+1}/${k})`,nota:i===0?`Total ${fmt(pesos)} en ${k} cuotas${base.nota?" · "+base.nota:""}`:base.nota})}
     }else docs.push({...base,monto:pesos});
+    const dc=!S.editing&&destAhorro(f.rubro),du=dc?parseMonto(f.dest):0;
+    if(dc&&du>0)docs.push({tipo:"ajuste",fecha:f.fecha,mes:mesDe(f.fecha),cuenta:dc,monto:du,nota:`${desc} (${fmt(pesos)} desde ${f.cuenta})`,origen:"app",archivado:false,actualizado:Date.now()});
   }else{Object.assign(base,{moneda:"ARS",monto:n,ingTipo:f.ingTipo,desc:f.desc.trim()||f.ingTipo});
     if(f.ingTipo==="Sueldo"){const u=parseMonto(f.usd);base.usd=u>0?u:null;base.tc=u>0?Math.round(n/u*100)/100:null}
     if(f.ingTipo==="Reintegro"){base.rubro=f.rubro;base.persona=f.persona||personaDef(f.rubro)}
@@ -592,7 +598,7 @@ async function guardar(){
     if(S.editing){const ed=S.editing;const nuevo={...ed,...docs[0]};delete nuevo.id;delete nuevo.reservado;
       if(nuevo.mes!==ed.mes){await S.db.doc(`meses/${nuevo.mes}/movs/${ed.id}`).set(nuevo);await S.db.doc(`meses/${ed.mes}/movs/${ed.id}`).update({archivado:true,movidoA:nuevo.mes,actualizado:Date.now()})}
       else await S.db.doc(`meses/${ed.mes}/movs/${ed.id}`).set(nuevo);toast("Cambios guardados")}
-    else{for(const d of docs){d.creado=Date.now();subMes(d.mes);await S.db.collection(`meses/${d.mes}/movs`).doc().set(d)}toast(docs.length>1?`Guardado en ${docs.length} cuotas`:"Guardado")}
+    else{for(const d of docs){d.creado=Date.now();subMes(d.mes);await S.db.collection(`meses/${d.mes}/movs`).doc().set(d)}toast(docs.some(d=>d.tipo==="ajuste")?`Guardado y sumado a ${docs.find(d=>d.tipo==="ajuste").cuenta}`:docs.length>1?`Guardado en ${docs.length} cuotas`:"Guardado")}
   }catch(e){toast("No se guardó: "+(e.message||e.code));btn.disabled=false;return}
   if(f.desc.trim())aprenderDesc(f.desc);
   if(esGasto&&f.desc.trim()){const k=norm(f.desc);const S0=S.memo;S.memo=S0.filter(x=>x[0]!==k);const rs=suggest(f.desc);S.memo=S0;
@@ -606,13 +612,13 @@ const seccCta=c=>c.seccion||"cotidiana";
 function vCuentas(){const sl=saldos();const cs=cuentas();const faltan=cs.filter(c=>c.saldoInicial==null);
   return `<header class="top"><h1>Cuentas</h1></header>
   <div class="balance"><span>Total del día a día</span><b class="num">${esc(fmt(totalCuentas(sl)))}</b></div>
-  <div class="balance"><span>Ahorros</span><b class="num">${esc(fmt(totalAhorrosUSD(sl),"USD"))}</b><label class="small muted" style="text-transform:none;letter-spacing:0;display:flex;gap:6px;align-items:center;justify-content:center">Pesos a dólar de $<input id="tcAh" inputmode="decimal" value="${esc(String(tcAhorro()).replace(".",","))}" style="width:90px;padding:2px 6px" aria-label="Dólar para pasar los ahorros en pesos"></label></div>
   <div class="row"><button type="button" data-go="transfer">⇄ Nueva transferencia</button><button type="button" data-go="lista" data-transf="1">Historial de transferencias</button></div>
   ${faltan.length?`<div class="need">Falta el saldo inicial de ${faltan.map(c=>esc(c.nombre)).join(", ")}. Entrá a cada una y cargalo para que el total sea real.</div>`:""}
   <div class="h" style="display:flex;justify-content:flex-end"><button type="button" class="ghost" data-act="ctaOrden">${S.ordenCtas?"Listo":"Ordenar cuentas"}</button></div>
   ${SECC.map(([k,tit])=>{const xs=cs.filter(c=>seccCta(c)===k);if(!xs.length)return "";
     const sub=k==="ahorro"?null:xs.filter(c=>c.incluir&&(c.moneda||"ARS")==="ARS").reduce((a,c)=>a+(sl[c.nombre]?sl[c.nombre].v:0),0);
     return `<div class="card" style="padding-block:6px"><div class="h" style="display:flex;justify-content:space-between;align-items:baseline;padding-top:8px"><h3>${tit}</h3><span class="small num">${esc(sub==null?fmt(totalAhorrosUSD(sl),"USD"):fmt(sub))}</span></div>
+    ${k==="ahorro"&&xs.some(c=>c.incluir&&(c.moneda||"ARS")==="ARS")?`<label class="small muted" style="display:flex;gap:6px;align-items:center;padding-bottom:6px">Las cuentas en pesos se pasan a dólar de $<input id="tcAh" inputmode="decimal" value="${esc(String(tcAhorro()).replace(".",","))}" style="width:90px;padding:2px 6px" aria-label="Dólar para pasar los ahorros en pesos"></label>`:""}
     ${S.ordenCtas?xs.map((c,i)=>`<div class="cat" style="cursor:default"><span class="ico" style="background:${c.color};font-size:15px;font-weight:700">${esc(c.nombre.charAt(0).toUpperCase())}</span><span class="n">${esc(c.nombre)}</span><span style="display:flex;gap:6px"><button type="button" class="ghost" data-ctamov="${esc(c.id)}|-1" aria-label="Subir ${esc(c.nombre)}" ${i===0?"disabled":""}>↑</button><button type="button" class="ghost" data-ctamov="${esc(c.id)}|1" aria-label="Bajar ${esc(c.nombre)}" ${i===xs.length-1?"disabled":""}>↓</button></span></div>`).join("")
      :xs.map(c=>{const s=sl[c.nombre];return `<button type="button" class="cat" data-cuenta="${esc(c.nombre)}"><span class="ico" style="background:${c.color};font-size:15px;font-weight:700">${esc(c.nombre.charAt(0).toUpperCase())}</span><span class="n">${esc(c.nombre)}${c.incluir?"":` <small class="muted">· fuera del total</small>`}${seccCta(c)==="ahorro"&&(c.moneda||"ARS")==="ARS"&&s.ok?` <small class="muted">≈ ${esc(fmt(s.v/tcAhorro(),"USD"))}</small>`:""}</span><span class="m">${s.ok?esc(fmt(s.v,c.moneda)):`<small class="muted">sin saldo</small>`}</span></button>`}).join("")}</div>`}).join("")}
   <button type="button" data-go="cuentaEdit" data-nueva="1">+ Nueva cuenta</button>
@@ -687,6 +693,9 @@ async function migrarV14(){if(YO()!=="Mati"||S.config.v14||!S.config.cuentasV2)r
   const A=["Fondo Viaje"],O=["Mercadopago","Bru","Lemon","Dukas","Dukas debit"];
   S.config.cuentasV2=cuentas(true).map(c=>({...c,seccion:c.seccion||(A.includes(c.nombre)?"ahorro":O.includes(c.nombre)?"otros":"cotidiana")}));
   S.config.v14=true;try{await guardarConfig()}catch{}render(false)}
+async function migrarV16(){if(YO()!=="Mati"||S.config.v16||!S.config.cuentasV2)return;
+  S.config.cuentasV2=cuentas(true).map(c=>c.nombre==="Fondo Viaje"&&(c.moneda||"ARS")==="ARS"?{...c,moneda:"USD",saldoInicialARS:c.saldoInicial,saldoInicial:null,desde:hoyISO()}:c);
+  S.config.v16=true;try{await guardarConfig()}catch{}render(false)}
 async function migrarV15(){if(YO()!=="Mati"||S.config.v15||!S.config.cuentasV2)return;const all=cuentas(true).slice();
   if(!all.some(c=>c.nombre==="Stocks")){const st={id:"c15stocks",nombre:"Stocks",color:"#2E7D32",moneda:"USD",incluir:true,saldoInicial:null,desde:null,archivada:false,seccion:"ahorro"};
     const f=all.findIndex(c=>c.nombre==="Fondo Viaje");all.splice(f<0?all.length:f+1,0,st)}
@@ -1085,7 +1094,7 @@ function vMovSimple(){const x=S.editing;if(!x)return "";
   db.doc("config/suscripciones").onSnapshot(s=>{if(s.exists)S.subsDoc={items:structuredClone(s.data().items||[]),v10:!!s.data().v10};render(false)});
   db.doc("config/habituales").onSnapshot(s=>{if(s.exists){const d=s.data();S.hab={items:structuredClone(d.items||[]),saltados:[...(d.saltados||[])],v10:!!d.v10}}render(false)});
   try{history.replaceState({d:0},"")}catch{}
-  setTimeout(migrarV10,2500);setTimeout(migrarV10,20000);setTimeout(migrarV12,4000);setTimeout(migrarV12,25000);setTimeout(migrarV13,6000);setTimeout(migrarV13,28000);setTimeout(migrarV14,8000);setTimeout(migrarV14,30000);setTimeout(migrarV15,10000);setTimeout(migrarV15,32000);
+  setTimeout(migrarV10,2500);setTimeout(migrarV10,20000);setTimeout(migrarV12,4000);setTimeout(migrarV12,25000);setTimeout(migrarV13,6000);setTimeout(migrarV13,28000);setTimeout(migrarV14,8000);setTimeout(migrarV14,30000);setTimeout(migrarV15,10000);setTimeout(migrarV15,32000);setTimeout(migrarV16,12000);setTimeout(migrarV16,34000);
   ensureSubs();S.ready=true;render(true);
   Sync.start();
 })();
