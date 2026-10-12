@@ -408,7 +408,10 @@ function saldos(){const o={};const hoy=hoyISO();
     else if(x.tipo==="transferencia"){ap(x.desde,-x.monto);ap(x.hacia,x.montoDestino??x.monto)}
     else if(x.tipo==="ajuste")ap(x.cuenta,x.monto)}
   return o}
-function totalCuentas(sl){return Object.values(sl).filter(s=>s.c.incluir&&!s.c.archivada&&(s.c.moneda||"ARS")==="ARS").reduce((a,s)=>a+s.v,0)}
+// El total general es solo de las cuentas del día a día (en pesos). Las de ahorro tienen su propio total, en dólares.
+function totalCuentas(sl){return Object.values(sl).filter(s=>s.c.incluir&&!s.c.archivada&&seccCta(s.c)==="cotidiana"&&(s.c.moneda||"ARS")==="ARS").reduce((a,s)=>a+s.v,0)}
+const tcAhorro=()=>+S.config.tcAhorro||+S.config.params.tc||1600;
+function totalAhorrosUSD(sl){const tc=tcAhorro();return Object.values(sl).filter(s=>s.c.incluir&&!s.c.archivada&&seccCta(s.c)==="ahorro").reduce((a,s)=>{const m=s.c.moneda||"ARS";return a+(m==="USD"?s.v:m==="ARS"?s.v/tc:0)},0)}
 
 // ================= período (Inicio) =================
 function rango(){const h=S.home,f=h.ref;
@@ -462,7 +465,7 @@ function vInicio(){const h=S.home,r=rango(),xs=movsPeriodo(),sl=saldos();
   const futuro=r.hasta>addDias(hoyISO(),1)&&r.desde>hoyISO();
   return `<header class="top"><h1>Caja ${esc(YO())}</h1>${syncChip()}</header>
   ${!Sync.cfg.url?`<div class="need">Conectá tu planilla para traer tus cuentas y pagos habituales, y para que lo que cargues quede respaldado. <button type="button" class="ghost" data-go="sync">Configurar</button></div>`:Sync.alerta()?`<div class="need">${esc(Sync.alerta())} <button type="button" class="ghost" data-go="sync">Ver</button></div>`:""}
-  <div class="balance"><span>Total en cuentas</span><b class="num">${esc(fmt(totalCuentas(sl)))}</b></div>
+  <div class="balance"><span>Total del día a día</span><b class="num">${esc(fmt(totalCuentas(sl)))}</b></div>
   ${pend.length?`<div class="pend"><b class="small">Pagos habituales para confirmar</b>${pend.slice(0,4).map(p=>`<div class="it"><span>${esc(p.desc)} · ${esc(fCorta(p.fecha))} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.occ}">Cargar</button><button type="button" data-hab-edit="${p.occ}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.occ}">Saltear</button></div>`).join("")}${pend.length>4?`<button type="button" class="ghost" data-go="habituales">Ver los ${pend.length}</button>`:""}</div>`:""}
   ${cardProximos()}
   <div class="card" style="gap:10px">
@@ -602,15 +605,16 @@ const SECC=[["cotidiana","Del día a día"],["ahorro","Ahorros"],["otros","Otras
 const seccCta=c=>c.seccion||"cotidiana";
 function vCuentas(){const sl=saldos();const cs=cuentas();const faltan=cs.filter(c=>c.saldoInicial==null);
   return `<header class="top"><h1>Cuentas</h1></header>
-  <div class="balance"><span>Total</span><b class="num">${esc(fmt(totalCuentas(sl)))}</b></div>
+  <div class="balance"><span>Total del día a día</span><b class="num">${esc(fmt(totalCuentas(sl)))}</b></div>
+  <div class="balance"><span>Ahorros</span><b class="num">${esc(fmt(totalAhorrosUSD(sl),"USD"))}</b><label class="small muted" style="text-transform:none;letter-spacing:0;display:flex;gap:6px;align-items:center;justify-content:center">Pesos a dólar de $<input id="tcAh" inputmode="decimal" value="${esc(String(tcAhorro()).replace(".",","))}" style="width:90px;padding:2px 6px" aria-label="Dólar para pasar los ahorros en pesos"></label></div>
   <div class="row"><button type="button" data-go="transfer">⇄ Nueva transferencia</button><button type="button" data-go="lista" data-transf="1">Historial de transferencias</button></div>
   ${faltan.length?`<div class="need">Falta el saldo inicial de ${faltan.map(c=>esc(c.nombre)).join(", ")}. Entrá a cada una y cargalo para que el total sea real.</div>`:""}
   <div class="h" style="display:flex;justify-content:flex-end"><button type="button" class="ghost" data-act="ctaOrden">${S.ordenCtas?"Listo":"Ordenar cuentas"}</button></div>
   ${SECC.map(([k,tit])=>{const xs=cs.filter(c=>seccCta(c)===k);if(!xs.length)return "";
-    const sub=xs.filter(c=>c.incluir&&(c.moneda||"ARS")==="ARS").reduce((a,c)=>a+(sl[c.nombre]?sl[c.nombre].v:0),0);
-    return `<div class="card" style="padding-block:6px"><div class="h" style="display:flex;justify-content:space-between;align-items:baseline;padding-top:8px"><h3>${tit}</h3><span class="small num">${esc(fmt(sub))}</span></div>
+    const sub=k==="ahorro"?null:xs.filter(c=>c.incluir&&(c.moneda||"ARS")==="ARS").reduce((a,c)=>a+(sl[c.nombre]?sl[c.nombre].v:0),0);
+    return `<div class="card" style="padding-block:6px"><div class="h" style="display:flex;justify-content:space-between;align-items:baseline;padding-top:8px"><h3>${tit}</h3><span class="small num">${esc(sub==null?fmt(totalAhorrosUSD(sl),"USD"):fmt(sub))}</span></div>
     ${S.ordenCtas?xs.map((c,i)=>`<div class="cat" style="cursor:default"><span class="ico" style="background:${c.color};font-size:15px;font-weight:700">${esc(c.nombre.charAt(0).toUpperCase())}</span><span class="n">${esc(c.nombre)}</span><span style="display:flex;gap:6px"><button type="button" class="ghost" data-ctamov="${esc(c.id)}|-1" aria-label="Subir ${esc(c.nombre)}" ${i===0?"disabled":""}>↑</button><button type="button" class="ghost" data-ctamov="${esc(c.id)}|1" aria-label="Bajar ${esc(c.nombre)}" ${i===xs.length-1?"disabled":""}>↓</button></span></div>`).join("")
-     :xs.map(c=>{const s=sl[c.nombre];return `<button type="button" class="cat" data-cuenta="${esc(c.nombre)}"><span class="ico" style="background:${c.color};font-size:15px;font-weight:700">${esc(c.nombre.charAt(0).toUpperCase())}</span><span class="n">${esc(c.nombre)}${c.incluir?"":` <small class="muted">· fuera del total</small>`}</span><span class="m">${s.ok?esc(fmt(s.v,c.moneda)):`<small class="muted">sin saldo</small>`}</span></button>`}).join("")}</div>`}).join("")}
+     :xs.map(c=>{const s=sl[c.nombre];return `<button type="button" class="cat" data-cuenta="${esc(c.nombre)}"><span class="ico" style="background:${c.color};font-size:15px;font-weight:700">${esc(c.nombre.charAt(0).toUpperCase())}</span><span class="n">${esc(c.nombre)}${c.incluir?"":` <small class="muted">· fuera del total</small>`}${seccCta(c)==="ahorro"&&(c.moneda||"ARS")==="ARS"&&s.ok?` <small class="muted">≈ ${esc(fmt(s.v/tcAhorro(),"USD"))}</small>`:""}</span><span class="m">${s.ok?esc(fmt(s.v,c.moneda)):`<small class="muted">sin saldo</small>`}</span></button>`}).join("")}</div>`}).join("")}
   <button type="button" data-go="cuentaEdit" data-nueva="1">+ Nueva cuenta</button>
   ${cuentas(true).some(c=>c.archivada)?`<p class="small muted" style="margin:0">Cuentas archivadas: ${cuentas(true).filter(c=>c.archivada).map(c=>`<button type="button" class="ghost" data-cuentaedit="${esc(c.nombre)}">${esc(c.nombre)}</button>`).join(" ")}</p>`:""}`}
 function vCuenta(p){const c=cuentaPorNombre(p.cuenta);if(!c)return `<div class="state">No existe esa cuenta.</div>`;const s=saldos()[c.nombre];
@@ -627,7 +631,7 @@ function vCuentaEdit(p){const c=S.ce||(S.ce=p.nueva?{id:"c"+uid(),nombre:"",colo
   <label>Saldo a la fecha (incluye lo de ese día)<input id="cDesde" type="date" value="${esc(c.desde||hoyISO())}"></label>
   <label>Sección<select id="cSecc">${SECC.map(([k,tt])=>`<option value="${k}" ${seccCta(c)===k?"selected":""}>${tt}</option>`).join("")}</select></label>
   <div><label style="margin-bottom:6px">Color</label><div class="swatches">${COLORES.map(k=>`<button type="button" data-color="${k}" style="background:${k}" aria-pressed="${k===c.color}" aria-label="Color"></button>`).join("")}</div></div>
-  <label class="toggle"><input type="checkbox" id="cIncl" ${c.incluir?"checked":""}>Incluir en el total</label>
+  <label class="toggle"><input type="checkbox" id="cIncl" ${c.incluir?"checked":""}>Incluir en el total de su sección</label><div class="hint">El total de arriba suma solo las cuentas del día a día. Las de ahorro suman aparte, en dólares. Las de "Otras" no suman.</div>
   <button class="primary" type="submit">Guardar</button>
   ${c._nueva?"":`<button type="button" class="${c.archivada?"":"danger"}" data-act="ctaArch">${c.archivada?"Restaurar cuenta":"Archivar cuenta"}</button><div class="hint">Archivar la saca de las listas; los movimientos se conservan.</div>`}</form>`}
 function vTransfer(p){const t=S.tf||(S.tf={desde:p.c||cuentas()[0].nombre,hacia:(cuentas().find(c=>c.nombre!==(p.c||cuentas()[0].nombre))||{}).nombre,monto:"",montoDest:"",fecha:hoyISO(),nota:""});
@@ -683,6 +687,10 @@ async function migrarV14(){if(YO()!=="Mati"||S.config.v14||!S.config.cuentasV2)r
   const A=["Fondo Viaje"],O=["Mercadopago","Bru","Lemon","Dukas","Dukas debit"];
   S.config.cuentasV2=cuentas(true).map(c=>({...c,seccion:c.seccion||(A.includes(c.nombre)?"ahorro":O.includes(c.nombre)?"otros":"cotidiana")}));
   S.config.v14=true;try{await guardarConfig()}catch{}render(false)}
+async function migrarV15(){if(YO()!=="Mati"||S.config.v15||!S.config.cuentasV2)return;const all=cuentas(true).slice();
+  if(!all.some(c=>c.nombre==="Stocks")){const st={id:"c15stocks",nombre:"Stocks",color:"#2E7D32",moneda:"USD",incluir:true,saldoInicial:null,desde:null,archivada:false,seccion:"ahorro"};
+    const f=all.findIndex(c=>c.nombre==="Fondo Viaje");all.splice(f<0?all.length:f+1,0,st)}
+  S.config.cuentasV2=all;S.config.v15=true;try{await guardarConfig()}catch{}render(false)}
 async function migrarV13(){if(YO()!=="Mati"||S.config.v13||!S.config.cuentasV2)return;const all=cuentas(true).slice();
   const v=all.findIndex(c=>c.nombre==="Visa BBVA");if(v<0)return;const[visa]=all.splice(v,1);const b=all.findIndex(c=>c.nombre==="BBVA");all.splice(b+1,0,visa);
   S.config.cuentasV2=all;S.config.v13=true;try{await guardarConfig()}catch{}render(false)}
@@ -1028,6 +1036,7 @@ $("#view").addEventListener("focusin",e=>{if(e.target.id==="iDesc"){paintSug();c
 $("#view").addEventListener("focusout",e=>{if(e.target.id==="iDesc")setTimeout(()=>{if(document.activeElement&&document.activeElement.id==="iDesc")return;const b=document.getElementById("descSug");if(b)b.hidden=true},150)});
 $("#view").addEventListener("pointerdown",e=>{if(e.target.closest("[data-dsug]"))e.preventDefault()});
 $("#view").addEventListener("change",e=>{const id=e.target.id;
+  if(id==="tcAh"){const v=parseMonto(e.target.value);if(v>0){S.config.tcAhorro=v;guardarConfig().then(()=>toast("Dólar actualizado")).catch(()=>{});render(false)}return}
   if(e.target.dataset&&e.target.dataset.psel!==undefined){const k=e.target.dataset.psel;S.papelSel=S.papelSel||new Set();e.target.checked?S.papelSel.add(k):S.papelSel.delete(k);S.confirmElimSel=false;return render(true)}
   if(id==="iArch"){S.showArch=e.target.checked;return render(true)}
   if(S.form&&scr().name==="cargar"&&["iCuotas","iComp","iFecha"].includes(id)){leerForm();if(id==="iComp")S.form.compartida=e.target.checked;return render(true)}
@@ -1076,7 +1085,7 @@ function vMovSimple(){const x=S.editing;if(!x)return "";
   db.doc("config/suscripciones").onSnapshot(s=>{if(s.exists)S.subsDoc={items:structuredClone(s.data().items||[]),v10:!!s.data().v10};render(false)});
   db.doc("config/habituales").onSnapshot(s=>{if(s.exists){const d=s.data();S.hab={items:structuredClone(d.items||[]),saltados:[...(d.saltados||[])],v10:!!d.v10}}render(false)});
   try{history.replaceState({d:0},"")}catch{}
-  setTimeout(migrarV10,2500);setTimeout(migrarV10,20000);setTimeout(migrarV12,4000);setTimeout(migrarV12,25000);setTimeout(migrarV13,6000);setTimeout(migrarV13,28000);setTimeout(migrarV14,8000);setTimeout(migrarV14,30000);
+  setTimeout(migrarV10,2500);setTimeout(migrarV10,20000);setTimeout(migrarV12,4000);setTimeout(migrarV12,25000);setTimeout(migrarV13,6000);setTimeout(migrarV13,28000);setTimeout(migrarV14,8000);setTimeout(migrarV14,30000);setTimeout(migrarV15,10000);setTimeout(migrarV15,32000);
   ensureSubs();S.ready=true;render(true);
   Sync.start();
 })();
