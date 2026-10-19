@@ -280,15 +280,15 @@ function vSync(){const c=Sync.cfg,n=LocalDB.pendingCount();
 // ================= taxonomía acordada =================
 const RUBROS={"Alquiler":"Fijos","Servicios":"Fijos","Suscripciones":"Fijos","Celular":"Fijos","Prepaga":"Fijos","Monotributo":"Fijos","Caja de seguridad":"Fijos","Limpieza":"Fijos","Gimnasio":"Fijos","Terapia":"Fijos",
 "Supermercado":"Necesarios variables","Transporte":"Necesarios variables","Salud":"Necesarios variables","Hogar":"Necesarios variables",
-"Comida del día":"Discrecionales","Salidas":"Discrecionales","Bajón":"Discrecionales","Ropa y cuidado personal":"Discrecionales","Tecnología":"Discrecionales","Ajedrez":"Discrecionales","Flores":"Discrecionales","Joda":"Discrecionales","Regalos":"Discrecionales","Otros":"Discrecionales",
+"Comida del día":"Discrecionales","Salidas":"Discrecionales","Delivery":"Discrecionales","Bajón":"Discrecionales","Ropa y cuidado personal":"Discrecionales","Tecnología":"Discrecionales","Ajedrez":"Discrecionales","Flores":"Discrecionales","Joda":"Discrecionales","Regalos":"Discrecionales","Otros":"Discrecionales",
 "Inversión":"Ahorro","Fondo de viaje":"Ahorro","Préstamo otorgado":"Fuera del gasto"};
 const ICO={"Alquiler":["🏠","#C2402F"],"Servicios":["💡","#D9822B"],"Suscripciones":["📺","#8E44AD"],"Celular":["📱","#2E86C1"],"Prepaga":["🩺","#16A085"],"Monotributo":["🧾","#7F8C8D"],"Caja de seguridad":["🔐","#5D6D7E"],"Limpieza":["🧹","#48C9B0"],"Gimnasio":["🏋️","#27AE60"],"Terapia":["🧠","#A569BD"],
 "Supermercado":["🛒","#1ABC9C"],"Transporte":["🚌","#3498DB"],"Salud":["💊","#E74C3C"],"Hogar":["🛋️","#5DADE2"],
-"Comida del día":["🥐","#F4B400"],"Salidas":["🍽️","#00B8A9"],"Bajón":["🍕","#E8505B"],"Ropa y cuidado personal":["👕","#6C8E3E"],"Tecnología":["💻","#34495E"],"Ajedrez":["♟️","#4E5D6C"],"Flores":["💐","#E84393"],"Joda":["🎉","#8BC34A"],"Regalos":["🎁","#B08D57"],"Otros":["📦","#95A5A6"],
+"Comida del día":["🥐","#F4B400"],"Salidas":["🍽️","#00B8A9"],"Delivery":["🛵","#FF7043"],"Bajón":["🍕","#E8505B"],"Ropa y cuidado personal":["👕","#6C8E3E"],"Tecnología":["💻","#34495E"],"Ajedrez":["♟️","#4E5D6C"],"Flores":["💐","#E84393"],"Joda":["🎉","#8BC34A"],"Regalos":["🎁","#B08D57"],"Otros":["📦","#95A5A6"],
 "Inversión":["📈","#2ECC71"],"Fondo de viaje":["✈️","#F39C12"],"Préstamo otorgado":["🤝","#7D6608"],
 "Sueldo":["💵","#2E86C1"],"Otros ingresos":["➕","#27AE60"],"Reintegro":["↩️","#16A085"],"Transferencia":["⇄","#7F8C8D"],"Ajuste de saldo":["±","#7F8C8D"]};
 const GRUPOS=["Discrecionales","Necesarios variables","Fijos","Ahorro","Fuera del gasto"];
-const DISC=["Comida del día","Salidas","Bajón","Ropa y cuidado personal","Flores","Joda","Ajedrez","Regalos","Otros"];
+const DISC=["Comida del día","Salidas","Delivery","Bajón","Ropa y cuidado personal","Flores","Joda","Ajedrez","Regalos","Otros"];
 const COMPARTIDO_DEF=new Set(["Alquiler","Servicios","Limpieza","Supermercado","Hogar","Caja de seguridad"]);
 const PERSONAS=["Mati","Cami","Compartido"];
 const ING_TIPOS=["Sueldo","Otros ingresos","Reintegro"];
@@ -308,9 +308,10 @@ const REGLAS=[
  [/zapatillas|ropa|remera|pantal[oó]n|campera|mochila|morral|peluquer|cejas|depilaci|tintura|maquillaje|gomitas|estuche|cartuchera|pomada/i,"Ropa y cuidado personal"],
  [/bazar|easy|plumero|regadera|escoba|tacho|repasador|pava|sandwichera|sart[eé]n|taza|moledora|adaptador|abanico|llave|lavadero|botella|masilla|mantel|alfombr|plaf[oó]n|zapatilla\b|red gatera|organizador|aire acondicionado/i,"Hogar","Compartido"],
  [/regalo/i,"Regalos"],[/bajón|bajon/i,"Bajón"],[/boliche|fiesta|joda/i,"Joda"],
+ [/(delivery|pedidos ?ya|rappi).*(cosito|catito|cami)|(cosito|catito|cami).*(delivery|pedidos ?ya|rappi)/i,"Delivery","Compartido"],[/delivery|pedidos ?ya|rappi/i,"Delivery"],
  [/cosito|catito|con cami|helado/i,"Salidas","Compartido"],[/medialunas con oppel/i,"Comida del día"],
  [/merienda con|cumple|cena|juntada|cancha|f[uú]tbol/i,"Salidas"],["CS",/con [A-ZÁÉÍÓÚ]/,"Salidas"],
- [/medialuna|caf[eé]|sanguch|facturas|empanada|alfajor|chip[aá]|capuccino|tostado|agua|muffin|pizza|rotiser|flan|panader|kfc|chocolatada|pancho|papitas|mcdonald|burger|almuerzo|rappi|pedidosya|delivery/i,"Comida del día"],
+ [/medialuna|caf[eé]|sanguch|facturas|empanada|alfajor|chip[aá]|capuccino|tostado|agua|muffin|pizza|rotiser|flan|panader|kfc|chocolatada|pancho|papitas|mcdonald|burger|almuerzo/i,"Comida del día"],
 ];
 const DEF_CONFIG={cuentas:["BBVA","Santander","Billetera","Cuenta DNI","Fondo Viaje","Cami"],cuentasV2:null,
   params:{sueldoUsd:2100,tc:1600,cami:1400000,spyUsd:200,viajeUsd:100,ahorroPct:5,imprevPct:20},base:null};
@@ -696,6 +697,21 @@ async function migrarV14(){if(YO()!=="Mati"||S.config.v14||!S.config.cuentasV2)r
 async function migrarV16(){if(YO()!=="Mati"||S.config.v16||!S.config.cuentasV2)return;
   S.config.cuentasV2=cuentas(true).map(c=>c.nombre==="Fondo Viaje"&&(c.moneda||"ARS")==="ARS"?{...c,moneda:"USD",saldoInicialARS:c.saldoInicial,saldoInicial:null,desde:hoyISO()}:c);
   S.config.v16=true;try{await guardarConfig()}catch{}render(false)}
+// v18 (19/10/2026): rubro Delivery, gastos que faltaban de la Visa (resumen al 18/10) y entradas del show en 3 cuotas mitad y mitad.
+async function migrarV18(){if(YO()!=="Mati"||S.config.v18||!S.config.cuentasV2)return;try{const now=Date.now();
+  const d1=LocalDB.raw("meses/2026-10/movs/mve2vz40njpkvpiv");
+  if(d1&&d1.rubro==="Salidas")await S.db.doc("meses/2026-10/movs/mve2vz40njpkvpiv").set({...d1,rubro:"Delivery",grupo:"Discrecionales",actualizado:now});
+  if(S.memo.some(x=>/delivery|pedidos ?ya|rappi/.test(x[0])&&x[1]!=="Delivery")){S.memo=S.memo.map(x=>/delivery|pedidos ?ya|rappi/.test(x[0])?[x[0],"Delivery",x[2]]:x);
+    await S.db.doc("config/memo").set({items:S.memo.map(x=>({k:x[0],r:x[1],p:x[2]}))})}
+  const B={origen:"app",archivado:false,nota:"",creado:now,actualizado:now,v18:true};
+  const G=(fecha,monto,desc,rubro,persona,extra)=>({...B,tipo:"gasto",fecha,mes:fecha.slice(0,7),cuenta:"Visa BBVA",moneda:"ARS",monto,desc,rubro,persona,grupo:RUBROS[rubro],compartida:null,...(extra||{})});
+  const docs={"meses/2026-10/movs/v18-claro":G("2026-10-16",22232,"Claro","Celular","Mati",{habitual:"h10"}),
+    "meses/2026-10/movs/v18-edesur":G("2026-10-15",21271.64,"Edesur","Servicios","Compartido",{habitual:"h7"})};
+  const fechas=["2026-10-16","2026-11-01","2026-12-01"];
+  for(const p of ["Mati","Cami"])fechas.forEach((f,i)=>{docs[`meses/${f.slice(0,7)}/movs/v18-show-${p.toLowerCase()}-${i+1}`]=G(f,73450,`Entradas show con el cosito (cuota ${i+1}/3)`,"Salidas",p,
+    {cuota:{n:i+1,de:3,total:220350,grupo:"v18-show-"+p.toLowerCase()},nota:i===0?"Ticketek: $440.700 en 3 cuotas de $146.900; mitad Mati, mitad Cami":""})});
+  for(const[pth,d]of Object.entries(docs))if(!LocalDB.raw(pth)){subMes(d.mes);await S.db.doc(pth).set(d)}
+  S.config.v18=true;await guardarConfig();toast("Se cargaron los gastos de la Visa que faltaban")}catch(e){}render(false)}
 async function migrarV15(){if(YO()!=="Mati"||S.config.v15||!S.config.cuentasV2)return;const all=cuentas(true).slice();
   if(!all.some(c=>c.nombre==="Stocks")){const st={id:"c15stocks",nombre:"Stocks",color:"#2E7D32",moneda:"USD",incluir:true,saldoInicial:null,desde:null,archivada:false,seccion:"ahorro"};
     const f=all.findIndex(c=>c.nombre==="Fondo Viaje");all.splice(f<0?all.length:f+1,0,st)}
@@ -705,11 +721,11 @@ async function migrarV13(){if(YO()!=="Mati"||S.config.v13||!S.config.cuentasV2)r
   S.config.cuentasV2=all;S.config.v13=true;try{await guardarConfig()}catch{}render(false)}
 // ================= Topes (solo Mati) =================
 // Montos de la pestaña "Proyección nueva (oct-26)" de la planilla. Se cambian en Topes → Ajustar topes.
-const DEF_TOPES={comida:70000,salidas:130000,joda:20000,bajon:25000,flores:70000,floresExtra:70000,eventuales:200000,ropaTrim:270000};
-const TOPE_RUB=[["salidas","Salidas",["Salidas"]],["comida","Comida en la calle",["Comida del día"]],["joda","Joda",["Joda"]],["bajon","Bajón",["Bajón"]],["flores","Flores",["Flores"]]];
+const DEF_TOPES={comida:70000,salidas:130000,compartidas:100000,joda:20000,bajon:25000,flores:70000,floresExtra:70000,eventuales:200000,ropaTrim:270000};
+const TOPE_RUB=[["salidas","Salidas y delivery",["Salidas","Delivery"]],["comida","Comida en la calle",["Comida del día"]],["joda","Joda",["Joda"]],["bajon","Bajón",["Bajón"]],["flores","Flores",["Flores"]]];
 const EVENT_RUB=["Salud","Hogar","Regalos","Otros","Tecnología"];
 const topesCfg=()=>({...DEF_TOPES,...(S.config.topesMati||{})});
-function gastoEn(xs,rubros,soloMati){let s=0;for(const x of xs){if(x.archivado||!rubros.includes(x.rubro))continue;if(soloMati&&x.persona!=="Mati")continue;
+function gastoEn(xs,rubros,soloMati,pers){let s=0;for(const x of xs){if(x.archivado||!rubros.includes(x.rubro))continue;if(soloMati&&x.persona!=="Mati")continue;if(pers&&x.persona!==pers)continue;
   if(x.tipo==="gasto")s+=x.monto;else if(x.tipo==="ingreso"&&x.ingTipo==="Reintegro")s-=x.monto}return s}
 function barra(g,t){const r=t>0?g/t:(g>0?2:0);const c=r>1?"crit":r>.8?"warn":"";return `<div class="bar" role="img" aria-label="${Math.round(r*100)}% del tope"><i class="${c}" style="width:${Math.min(r,1)*100}%"></i></div>`}
 // pide meses que la pantalla necesita, fuera del render (evita llamadas en cadena)
@@ -726,6 +742,7 @@ function vTopes(){
   const R=TOPE_RUB.map(([k,nom,rubs])=>({k,nom,g:gastoEn(xsMes,rubs,k!=="flores"),s:gastoEn(xsSem,rubs,k!=="flores"),t:T[k]}));
   const sal=R.find(r=>r.k==="salidas"),com=R.find(r=>r.k==="comida");const qSal=sal.t-sal.g+com.t-com.g;
   const ev=gastoEn(xsMes,EVENT_RUB,false);
+  const cg=gastoEn(xsMes,["Salidas","Delivery"],false,"Compartido"),cs=gastoEn(xsSem,["Salidas","Delivery"],false,"Compartido");
   const ropa=gastoEn(q.flatMap(movsDe),["Ropa y cuidado personal"],true);const qMesesRest=q.filter(m=>m>=mes).length;
   return `<header class="top"><h1>Topes de ${esc(nombreMes(mes).split(" ")[0])}</h1></header>
   <div class="card"><h3>Para salir</h3><span class="small muted">Salidas + comida en la calle, lo que queda del mes</span>
@@ -734,13 +751,14 @@ function vTopes(){
   <div class="card"><h3>Tus gastos del mes</h3>
    ${R.filter(r=>r.k!=="flores").map(r=>fila(r.nom,r.g,r.t,r.s)).join("")}
    ${(()=>{const f=R.find(r=>r.k==="flores");return fila("Flores",f.g,f.t,null,`<div class="small muted">Mínimo ${esc(fmt(T.flores))}. El 26, la revisión te dice si alcanza para sumar ${esc(fmt(T.floresExtra))} más.</div>`)})()}</div>
+  <div class="card"><h3>Compartido con Cami</h3>${fila("Salidas y delivery compartidos",cg,T.compartidas,cs)}</div>
   <div class="card"><h3>Eventuales</h3>${fila("Salud no fija, hogar, regalos, otros",ev,T.eventuales,null,`<div class="small muted">Fondo para imprevistos. Antes de un regalo, mirá cuánto queda. Suma lo que cargás vos (lo de Cami no se ve en esta app).</div>`)}</div>
   <div class="card"><h3>Ropa · trimestre ${esc(nombreMes(q[0]).split(" ")[0].slice(0,3).toLowerCase())}–${esc(nombreMes(q[2]).split(" ")[0].slice(0,3).toLowerCase())}</h3>
    <div class="trow"><div class="h"><span>Ropa y arreglos</span><span>${esc(fmt(ropa))} / ${esc(fmt(T.ropaTrim))}</span></div>${barra(ropa,T.ropaTrim)}
    <div class="tline"><span>${T.ropaTrim-ropa>=0?`Te quedan <b>${esc(fmt(T.ropaTrim-ropa))}</b> en ${qMesesRest} mes${qMesesRest>1?"es":""}`:`<b style="color:var(--crit)">Te pasaste ${esc(fmt(ropa-T.ropaTrim))}</b>`}</span></div>
    <div class="small muted">Lo que sobre del trimestre puede ir a flores.</div></div></div>
   <button type="button" data-go="ajustes">Ajustar topes</button>
-  <p class="small muted" style="margin:0">Cuenta lo que cargaste a tu nombre (las salidas compartidas no entran). La semana va de lunes a domingo. Los montos salen de la proyección de la planilla.</p>`}
+  <p class="small muted" style="margin:0">Tus topes cuentan lo que cargaste a tu nombre; las salidas y deliveries compartidos van a su propio tope. La semana va de lunes a domingo. Los montos salen de la proyección de la planilla.</p>`}
 
 // ================= Más, pagos habituales, ajustes =================
 function vMas(){
@@ -825,6 +843,7 @@ function vAjustes(){const T=topesCfg();const campo=(id,tt,v)=>`<label>${tt}<inpu
   return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Ajustar topes</h2></header>
   <form class="card" id="fAj"><p class="small muted" style="margin:0">Montos por mes, en pesos. Solo para Mati.</p>
    <div class="row">${campo("tSalidas","Salidas",T.salidas)}${campo("tComida","Comida en la calle",T.comida)}</div>
+   <div class="row">${campo("tComp","Salidas y delivery compartidos",T.compartidas)}</div>
    <div class="row">${campo("tJoda","Joda",T.joda)}${campo("tBajon","Bajón",T.bajon)}</div>
    <div class="row">${campo("tFlores","Flores (mínimo)",T.flores)}${campo("tFloresX","Flores extra si alcanza",T.floresExtra)}</div>
    <div class="row">${campo("tEvent","Eventuales (fondo del mes)",T.eventuales)}${campo("tRopa","Ropa por trimestre",T.ropaTrim)}</div>
@@ -1074,7 +1093,7 @@ $("#view").addEventListener("submit",async e=>{e.preventDefault();const id=e.tar
   if(id==="fHab"){const h=S.he;h.desc=g("hDesc").value.trim();h.monto=evalMonto(g("hMonto").value);h.dia=Math.min(31,Math.max(1,+g("hDia").value||1));h.frec=g("hFrec").value;h.dsem=+g("hDsem").value;h.rubro=g("hRubro").value;h.persona=g("hPers").value;h.cuenta=g("hCta").value;
     if(!h.desc||!(h.monto>0))return toast("Poné descripción y monto.");const{_nuevo,...l}=h;S.hab.items=_nuevo?[...S.hab.items,l]:S.hab.items.map(x=>x.id===h.id?l:x);
     try{await guardarHab();toast("Guardado")}catch{return}S.he=null;return back()}
-  if(id==="fAj"){const n=i=>{const v=evalMonto(g(i).value);return isFinite(v)&&v>=0?v:null};const o={salidas:n("tSalidas"),comida:n("tComida"),joda:n("tJoda"),bajon:n("tBajon"),flores:n("tFlores"),floresExtra:n("tFloresX"),eventuales:n("tEvent"),ropaTrim:n("tRopa")};
+  if(id==="fAj"){const n=i=>{const v=evalMonto(g(i).value);return isFinite(v)&&v>=0?v:null};const o={salidas:n("tSalidas"),compartidas:n("tComp"),comida:n("tComida"),joda:n("tJoda"),bajon:n("tBajon"),flores:n("tFlores"),floresExtra:n("tFloresX"),eventuales:n("tEvent"),ropaTrim:n("tRopa")};
     if(Object.values(o).some(v=>v==null))return toast("Revisá los montos.");S.config.topesMati=o;try{await guardarConfig();toast("Topes guardados")}catch{return}return back()}
 });
 // transferencias y ajustes: vista simple con archivar
@@ -1094,7 +1113,7 @@ function vMovSimple(){const x=S.editing;if(!x)return "";
   db.doc("config/suscripciones").onSnapshot(s=>{if(s.exists)S.subsDoc={items:structuredClone(s.data().items||[]),v10:!!s.data().v10};render(false)});
   db.doc("config/habituales").onSnapshot(s=>{if(s.exists){const d=s.data();S.hab={items:structuredClone(d.items||[]),saltados:[...(d.saltados||[])],v10:!!d.v10}}render(false)});
   try{history.replaceState({d:0},"")}catch{}
-  setTimeout(migrarV10,2500);setTimeout(migrarV10,20000);setTimeout(migrarV12,4000);setTimeout(migrarV12,25000);setTimeout(migrarV13,6000);setTimeout(migrarV13,28000);setTimeout(migrarV14,8000);setTimeout(migrarV14,30000);setTimeout(migrarV15,10000);setTimeout(migrarV15,32000);setTimeout(migrarV16,12000);setTimeout(migrarV16,34000);
+  setTimeout(migrarV10,2500);setTimeout(migrarV10,20000);setTimeout(migrarV12,4000);setTimeout(migrarV12,25000);setTimeout(migrarV13,6000);setTimeout(migrarV13,28000);setTimeout(migrarV14,8000);setTimeout(migrarV14,30000);setTimeout(migrarV15,10000);setTimeout(migrarV15,32000);setTimeout(migrarV16,12000);setTimeout(migrarV16,34000);setTimeout(migrarV18,14000);setTimeout(migrarV18,36000);
   ensureSubs();S.ready=true;render(true);
   Sync.start();
 })();
