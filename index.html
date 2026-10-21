@@ -137,6 +137,9 @@ details.more[open] summary{margin-bottom:10px}
 .bar i.warn{background:var(--warn)} .bar i.crit{background:var(--crit)}
 .trow{display:flex;flex-direction:column;gap:5px;padding:8px 0;border-top:1px solid var(--line)}
 .trow:first-of-type{border-top:0}
+button.trow{width:100%;text-align:left;background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;color:inherit;font:inherit;cursor:pointer}
+button.trow:first-of-type{border-top:0}
+.tmeta{font-size:12px;color:var(--muted);margin:2px 0 0}
 .trow .h{display:flex;justify-content:space-between;gap:8px;font-size:14px}
 .trow .h span:last-child{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 .state{padding:24px 16px;text-align:center;color:var(--muted)}
@@ -467,7 +470,7 @@ function vInicio(){const h=S.home,r=rango(),xs=movsPeriodo(),sl=saldos();
   return `<header class="top"><h1>Caja ${esc(YO())}</h1>${syncChip()}</header>
   ${!Sync.cfg.url?`<div class="need">Conectá tu planilla para traer tus cuentas y pagos habituales, y para que lo que cargues quede respaldado. <button type="button" class="ghost" data-go="sync">Configurar</button></div>`:Sync.alerta()?`<div class="need">${esc(Sync.alerta())} <button type="button" class="ghost" data-go="sync">Ver</button></div>`:""}
   <div class="balance"><span>Total del día a día</span><b class="num">${esc(fmt(totalCuentas(sl)))}</b></div>
-  ${pend.length?`<div class="pend"><b class="small">Pagos habituales para confirmar</b>${pend.slice(0,4).map(p=>`<div class="it"><span>${esc(p.desc)} · ${esc(fCorta(p.fecha))} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.occ}">Cargar</button><button type="button" data-hab-edit="${p.occ}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.occ}">Saltear</button></div>`).join("")}${pend.length>4?`<button type="button" class="ghost" data-go="habituales">Ver los ${pend.length}</button>`:""}</div>`:""}
+  ${false&&pend.length?`<div class="pend"><b class="small">Pagos habituales para confirmar</b>${pend.slice(0,4).map(p=>`<div class="it"><span>${esc(p.desc)} · ${esc(fCorta(p.fecha))} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.occ}">Cargar</button><button type="button" data-hab-edit="${p.occ}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.occ}">Saltear</button></div>`).join("")}${pend.length>4?`<button type="button" class="ghost" data-go="habituales">Ver los ${pend.length}</button>`:""}</div>`:""}
   ${cardProximos()}
   <div class="card" style="gap:10px">
    <div class="under">${[["gasto","Gastos"],["ingreso","Ingresos"]].map(([k,t])=>`<button type="button" data-htipo="${k}" aria-pressed="${h.tipo===k}">${t}</button>`).join("")}</div>
@@ -490,14 +493,15 @@ function calendario(r,tipo){const m=S.calMes||mesDe(S.home.ref);needMeses([m]);c
   return `${S.home.per==="mes"&&!S.calMes?"":`<div class="calh"><button type="button" data-calmov="-1" aria-label="Mes anterior">‹</button><span class="small"><b>${esc(nombreMes(m))}</b></span><button type="button" data-calmov="1" aria-label="Mes siguiente">›</button></div>`}
    <div class="cal">${["L","M","M","J","V","S","D"].map(x=>`<span class="wd">${x}</span>`).join("")}${celdas.join("")}</div>`}
 // ================= lista de movimientos =================
-function movRow(x){
+function movRow(x,conFecha){
   const sl=S._sl||{};let k,meta,sign="",cls="",monto=x.monto,mon="ARS",desc=x.desc;
   if(x.tipo==="transferencia"){k="Transferencia";desc=`${x.desde} → ${x.hacia}`;meta=[x.nota||null];cls="neutral";mon=(cuentaPorNombre(x.desde)||{}).moneda||"ARS"}
   else if(x.tipo==="ajuste"){k="Ajuste de saldo";desc=`Ajuste ${x.cuenta}`;meta=[x.nota||null];cls="neutral";sign=x.monto>=0?"+":"−";monto=Math.abs(x.monto)}
   else if(x.tipo==="ingreso"){k=x.ingTipo;meta=[x.ingTipo==="Reintegro"?"reintegro de "+x.rubro:x.ingTipo,x.cuenta];sign=x.ingTipo==="Reintegro"?"−":"+";cls="ing"}
   else{k=x.rubro;meta=[x.rubro,x.persona&&x.persona!==YO()?x.persona:null,x.cuenta,x.moneda==="USD"?"US$ "+x.montoOrig:null,x.compartida?"mi parte de "+fmt(x.compartida.total):null]}
-  if(x.archivado)meta.push("archivado");
-  return `<button type="button" class="mov ${cls} ${x.archivado?"arch":""}" data-edit="${esc(x.mes)}|${esc(x.id)}">${ico(k)}<div class="d"><div>${esc(desc)}</div><div class="small muted">${meta.filter(Boolean).map(esc).join(" · ")}</div></div><div class="m">${sign}${esc(fmt(monto,mon))}</div></button>`}
+  if(x.archivado)meta.push("archivado");if(conFecha)meta.unshift(fCorta(x.fecha));
+  const nt=notaTope(x);
+  return `<button type="button" class="mov ${cls} ${x.archivado?"arch":""}" data-edit="${esc(x.mes)}|${esc(x.id)}">${ico(k)}<div class="d"><div>${esc(desc)}</div><div class="small muted">${meta.filter(Boolean).map(esc).join(" · ")}</div>${nt?`<div class="tmeta">↪ ${esc(nt)}</div>`:""}</div><div class="m">${sign}${esc(fmt(monto,mon))}</div></button>`}
 function listaPorDia(xs){const byDay={};xs.sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.creado||0)-(a.creado||0)).forEach(x=>(byDay[x.fecha]=byDay[x.fecha]||[]).push(x));
   return Object.keys(byDay).map(d=>{const tot=byDay[d].filter(x=>x.tipo==="gasto"&&!x.archivado).reduce((s,x)=>s+x.monto,0);
     return `<div class="day"><span>${esc(cap(fDia(d)))}</span><span class="num">${tot?esc(fmt(tot)):""}</span></div>`+byDay[d].map(movRow).join("")}).join("")}
@@ -558,8 +562,19 @@ function vCargar(){
      ${f.compartida?`<label>Total que pagué<input id="iTotal" inputmode="decimal" value="${esc(f.total)}" placeholder="ej. 143.479"></label><div class="hint">Se cuenta solo tu parte. Si no te devuelven enseguida, cargá el total y después la devolución como ingreso.</div>`:""}
      <label>Nota<input id="iNota" value="${esc(f.nota)}" placeholder="opcional"></label></div></details>`:`<label>Nota<input id="iNota" value="${esc(f.nota)}" placeholder="opcional"></label>`}
    <button class="primary" type="submit" id="bGuardar">${ed?"Guardar cambios":"Añadir"}</button>
+   ${ed?bloqueTope(ed):""}
    ${ed?archBloque(ed):""}
   </form>`}
+function bloqueTope(ed){if(YO()!=="Mati"||!(ed.tipo==="gasto"||(ed.tipo==="ingreso"&&ed.ingTipo==="Reintegro")))return "";const nat=topeNatural(ed),act=topeDe(ed);
+  return `<div class="card" style="gap:8px;background:var(--sunk)"><b class="small">Tope</b>
+   <div class="small">${act?`Cuenta en <b>${esc(TOPE_NOM[act])}</b>`:"No cuenta en ningún tope"}${ed.topeA?`<br><span class="muted">${esc(notaTope(ed))}</span>`:""}</div>
+   <div class="row"><label>Pasar a<select id="iTope"><option value="">elegí un tope</option>${Object.entries(TOPE_NOM).filter(([k])=>k!==act).map(([k,n])=>`<option value="${k}">${esc(n)}</option>`).join("")}</select></label>
+   <button type="button" data-act="topePasar" style="align-self:end">Pasar</button></div>
+   ${ed.topeA?`<button type="button" class="ghost" data-act="topeVolver">Volver a ${esc(nat?TOPE_NOM[nat]:"sin tope")}</button>`:""}
+   <div class="hint">El rubro no cambia (en el registro y en la planilla sigue siendo ${esc(ed.rubro||"")}). Solo cambia en qué tope cuenta, y queda anotado quién y cuándo lo pasó.</div></div>`}
+async function cambiarTope(k){const ed=S.editing;if(!ed)return;const path=`meses/${ed.mes}/movs/${ed.id}`;const cur=LocalDB.raw(path);if(!cur)return;
+  const nuevo={...cur,actualizado:Date.now()};if(k)nuevo.topeA={k,desde:topeNatural(cur),por:YO(),fecha:hoyISO()};else delete nuevo.topeA;
+  try{await S.db.doc(path).set(nuevo);S.editing={...ed,...nuevo};toast(k?`Ahora cuenta en ${TOPE_NOM[k]}`:"Volvió a su tope");render(true)}catch(e){toast("No se guardó: "+(e.message||e.code))}}
 function archBloque(ed){
   if(S.confirmArch)return `<div class="confirm">¿Archivar este movimiento? Deja de contar en los totales y en los saldos, pero no se borra: lo podés restaurar desde la lista con "Mostrar archivados".<div class="row"><button type="button" class="danger" data-act="archSi">Archivar</button><button type="button" data-act="archNo">No</button></div></div>`;
   if(S.confirmBorrar)return `<div class="confirm">¿Borrar este movimiento? Desaparece de la app y de los totales en todos tus dispositivos. Queda en la papelera (Registro → Papelera) por si te arrepentís.<div class="row"><button type="button" class="danger" data-act="borrarSi">Borrar</button><button type="button" data-act="borrarNo">No</button></div></div>`;
@@ -725,6 +740,17 @@ const DEF_TOPES={comida:70000,salidas:130000,compartidas:100000,joda:20000,bajon
 const TOPE_RUB=[["salidas","Salidas y delivery",["Salidas","Delivery"]],["comida","Comida en la calle",["Comida del día"]],["joda","Joda",["Joda"]],["bajon","Bajón",["Bajón"]],["flores","Flores",["Flores"]]];
 const EVENT_RUB=["Salud","Hogar","Regalos","Otros","Tecnología"];
 const topesCfg=()=>({...DEF_TOPES,...(S.config.topesMati||{})});
+// Cada gasto cuenta en un tope según su rubro y de quién es. Mati puede pasar un gasto a otro tope (x.topeA) sin cambiar el rubro:
+// el registro y la planilla siguen mostrando el rubro real; solo cambia en qué tope cuenta.
+const TOPE_NOM={salidas:"Salidas y delivery",compartidas:"Salidas y delivery compartidos",comida:"Comida en la calle",joda:"Joda",bajon:"Bajón",flores:"Flores",eventuales:"Eventuales",ropa:"Ropa y arreglos"};
+function topeNatural(x){if(x.tipo!=="gasto"&&!(x.tipo==="ingreso"&&x.ingTipo==="Reintegro"))return null;const r=x.rubro,p=x.persona;
+  if(r==="Salidas"||r==="Delivery")return p==="Mati"?"salidas":p==="Compartido"?"compartidas":null;
+  if(r==="Comida del día")return p==="Mati"?"comida":null;if(r==="Joda")return p==="Mati"?"joda":null;if(r==="Bajón")return p==="Mati"?"bajon":null;
+  if(r==="Flores")return "flores";if(EVENT_RUB.includes(r))return "eventuales";if(r==="Ropa y cuidado personal")return p==="Mati"?"ropa":null;return null}
+const topeDe=x=>(x.topeA&&x.topeA.k)||topeNatural(x);
+const movsTope=(xs,k)=>xs.filter(x=>!x.archivado&&topeDe(x)===k).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+const sumTope=(xs,k)=>movsTope(xs,k).reduce((a,x)=>a+(x.tipo==="ingreso"?-x.monto:x.monto),0);
+const notaTope=x=>x.topeA?`Cuenta en ${TOPE_NOM[x.topeA.k]||x.topeA.k} · pasado desde ${x.topeA.desde?TOPE_NOM[x.topeA.desde]||x.topeA.desde:"ningún tope"} por ${x.topeA.por} el ${fCorta(x.topeA.fecha)}`:"";
 function gastoEn(xs,rubros,soloMati,pers){let s=0;for(const x of xs){if(x.archivado||!rubros.includes(x.rubro))continue;if(soloMati&&x.persona!=="Mati")continue;if(pers&&x.persona!==pers)continue;
   if(x.tipo==="gasto")s+=x.monto;else if(x.tipo==="ingreso"&&x.ingTipo==="Reintegro")s-=x.monto}return s}
 function barra(g,t){const r=t>0?g/t:(g>0?2:0);const c=r>1?"crit":r>.8?"warn":"";return `<div class="bar" role="img" aria-label="${Math.round(r*100)}% del tope"><i class="${c}" style="width:${Math.min(r,1)*100}%"></i></div>`}
@@ -738,27 +764,34 @@ function vTopes(){
   const xsMes=movsDe(mes),xsSem=[...new Set([mes,mesDe(lu)])].flatMap(movsDe).filter(x=>x.fecha>=lu&&x.fecha<finS&&x.fecha<=hoy);
   const ult=new Date(+mes.slice(0,4),+mes.slice(5),0).getDate(),dRest=ult-(+hoy.slice(8))+1,semRest=Math.max(1,dRest/7);
   const linea=(g,tope,semana)=>{const q=tope-g;return `<div class="tline"><span>${q>=0?`Te quedan <b>${esc(fmt(q))}</b> · ≈ ${esc(fmt(q/semRest))} por semana`:`<b style="color:var(--crit)">Te pasaste ${esc(fmt(-q))}</b>`}</span>${semana!=null?`<span>Esta semana ${esc(fmt(semana))}</span>`:""}</div>`};
-  const fila=(nom,g,tope,semana,extra)=>`<div class="trow"><div class="h"><span>${esc(nom)}</span><span>${esc(fmt(g))} / ${esc(fmt(tope))}</span></div>${barra(g,tope)}${linea(g,tope,semana)}${extra||""}</div>`;
-  const R=TOPE_RUB.map(([k,nom,rubs])=>({k,nom,g:gastoEn(xsMes,rubs,k!=="flores"),s:gastoEn(xsSem,rubs,k!=="flores"),t:T[k]}));
+  const fila=(nom,g,tope,semana,extra,k)=>`<button type="button" class="trow" data-go="tope" data-k="${k}" aria-label="Ver los gastos de ${esc(nom)}"><div class="h"><span>${esc(nom)} ›</span><span>${esc(fmt(g))} / ${esc(fmt(tope))}</span></div>${barra(g,tope)}${linea(g,tope,semana)}${extra||""}</button>`;
+  const R=TOPE_RUB.map(([k,nom])=>({k,nom,g:sumTope(xsMes,k),s:sumTope(xsSem,k),t:T[k]}));
   const sal=R.find(r=>r.k==="salidas"),com=R.find(r=>r.k==="comida");const qSal=sal.t-sal.g+com.t-com.g;
-  const ev=gastoEn(xsMes,EVENT_RUB,false);
-  const cg=gastoEn(xsMes,["Salidas","Delivery"],false,"Compartido"),cs=gastoEn(xsSem,["Salidas","Delivery"],false,"Compartido");
-  const ropa=gastoEn(q.flatMap(movsDe),["Ropa y cuidado personal"],true);const qMesesRest=q.filter(m=>m>=mes).length;
+  const ev=sumTope(xsMes,"eventuales");
+  const cg=sumTope(xsMes,"compartidas"),cs=sumTope(xsSem,"compartidas");
+  const ropa=sumTope(q.flatMap(movsDe),"ropa");const qMesesRest=q.filter(m=>m>=mes).length;
   return `<header class="top"><h1>Topes de ${esc(nombreMes(mes).split(" ")[0])}</h1></header>
   <div class="card"><h3>Para salir</h3><span class="small muted">Salidas + comida en la calle, lo que queda del mes</span>
    <div class="big num" style="color:${qSal>=0?"var(--fg)":"var(--crit)"}">${esc(fmt(qSal))}</div>
    <div class="tline"><span>≈ <b>${esc(fmt(Math.max(qSal,0)/semRest))}</b> por semana · quedan ${dRest} día${dRest>1?"s":""}</span><span>Esta semana ${esc(fmt(sal.s+com.s))}</span></div></div>
   <div class="card"><h3>Tus gastos del mes</h3>
-   ${R.filter(r=>r.k!=="flores").map(r=>fila(r.nom,r.g,r.t,r.s)).join("")}
-   ${(()=>{const f=R.find(r=>r.k==="flores");return fila("Flores",f.g,f.t,null,`<div class="small muted">Mínimo ${esc(fmt(T.flores))}. El 26, la revisión te dice si alcanza para sumar ${esc(fmt(T.floresExtra))} más.</div>`)})()}</div>
-  <div class="card"><h3>Compartido con Cami</h3>${fila("Salidas y delivery compartidos",cg,T.compartidas,cs)}</div>
-  <div class="card"><h3>Eventuales</h3>${fila("Salud no fija, hogar, regalos, otros",ev,T.eventuales,null,`<div class="small muted">Fondo para imprevistos. Antes de un regalo, mirá cuánto queda. Suma lo que cargás vos (lo de Cami no se ve en esta app).</div>`)}</div>
+   ${R.filter(r=>r.k!=="flores").map(r=>fila(r.nom,r.g,r.t,r.s,"",r.k)).join("")}
+   ${(()=>{const f=R.find(r=>r.k==="flores");return fila("Flores",f.g,f.t,null,`<div class="small muted">Mínimo ${esc(fmt(T.flores))}. El 26, la revisión te dice si alcanza para sumar ${esc(fmt(T.floresExtra))} más.</div>`,"flores")})()}</div>
+  <div class="card"><h3>Compartido con Cami</h3>${fila("Salidas y delivery compartidos",cg,T.compartidas,cs,"","compartidas")}</div>
+  <div class="card"><h3>Eventuales</h3>${fila("Salud no fija, hogar, regalos, otros",ev,T.eventuales,null,`<div class="small muted">Fondo para imprevistos. Antes de un regalo, mirá cuánto queda. Suma lo que cargás vos (lo de Cami no se ve en esta app).</div>`,"eventuales")}</div>
   <div class="card"><h3>Ropa · trimestre ${esc(nombreMes(q[0]).split(" ")[0].slice(0,3).toLowerCase())}–${esc(nombreMes(q[2]).split(" ")[0].slice(0,3).toLowerCase())}</h3>
-   <div class="trow"><div class="h"><span>Ropa y arreglos</span><span>${esc(fmt(ropa))} / ${esc(fmt(T.ropaTrim))}</span></div>${barra(ropa,T.ropaTrim)}
+   <button type="button" class="trow" data-go="tope" data-k="ropa" aria-label="Ver los gastos de ropa"><div class="h"><span>Ropa y arreglos ›</span><span>${esc(fmt(ropa))} / ${esc(fmt(T.ropaTrim))}</span></div>${barra(ropa,T.ropaTrim)}
    <div class="tline"><span>${T.ropaTrim-ropa>=0?`Te quedan <b>${esc(fmt(T.ropaTrim-ropa))}</b> en ${qMesesRest} mes${qMesesRest>1?"es":""}`:`<b style="color:var(--crit)">Te pasaste ${esc(fmt(ropa-T.ropaTrim))}</b>`}</span></div>
-   <div class="small muted">Lo que sobre del trimestre puede ir a flores.</div></div></div>
+   <div class="small muted">Lo que sobre del trimestre puede ir a flores.</div></button></div>
   <button type="button" data-go="ajustes">Ajustar topes</button>
-  <p class="small muted" style="margin:0">Tus topes cuentan lo que cargaste a tu nombre; las salidas y deliveries compartidos van a su propio tope. La semana va de lunes a domingo. Los montos salen de la proyección de la planilla.</p>`}
+  <p class="small muted" style="margin:0">Tus topes cuentan lo que cargaste a tu nombre; las salidas y deliveries compartidos van a su propio tope. La semana va de lunes a domingo. Los montos salen de la proyección de la planilla. Tocá un tope para ver qué gastos lo forman.</p>`}
+function vTope(p){const k=p.k;const hoy=hoyISO(),mes=mesDe(hoy);const ms=k==="ropa"?trimestre(mes):[mes];needMeses(ms);
+  const xs=movsTope(ms.flatMap(movsDe),k);const tot=xs.reduce((a,x)=>a+(x.tipo==="ingreso"?-x.monto:x.monto),0);
+  const tope=k==="ropa"?topesCfg().ropaTrim:topesCfg()[k];
+  return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">${esc(TOPE_NOM[k]||k)}</h2></header>
+  <div class="balance"><span>${k==="ropa"?"En el trimestre":"En "+esc(nombreMes(mes).split(" ")[0].toLowerCase())}</span><b class="num">${esc(fmt(tot))}</b>${tope!=null?`<span class="small muted" style="text-transform:none;letter-spacing:0">de ${esc(fmt(tope))}</span>`:""}</div>
+  <div class="card" style="padding-block:6px">${xs.length?xs.map(x=>movRow(x,true)).join(""):`<div class="state">Todavía no hay gastos en este tope.</div>`}</div>
+  <p class="small muted" style="margin:0">Tocá un gasto para abrirlo. Desde ahí lo podés pasar a otro tope (por ejemplo, a Ropa si este mes no la usás): el rubro no cambia, solo en qué tope cuenta.</p>`}
 
 // ================= Más, pagos habituales, ajustes =================
 function vMas(){
@@ -791,7 +824,7 @@ function pagosAgrupados(){const tc=S.config.params.tc||1600;const out=[];const h
   grupos.forEach(x=>{x.xs.sort((a,b)=>b.mes-a.mes);x.total=x.xs.reduce((a,o)=>a+o.mes,0)});return grupos}
 function vPagos(){const pend=pendientes();const G=pagosAgrupados();const tot=G.reduce((a,x)=>a+x.total,0);
   return `<header class="top"><h1>Pagos</h1></header>
-  ${pend.length?`<div class="pend"><b class="small">Pagos habituales para confirmar</b>${pend.map(p=>`<div class="it"><span>${esc(p.desc)} · ${esc(fCorta(p.fecha))} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.occ}">Cargar</button><button type="button" data-hab-edit="${p.occ}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.occ}">Saltear</button></div>`).join("")}</div>`:""}
+  ${false&&pend.length?`<div class="pend"><b class="small">Pagos habituales para confirmar</b>${pend.map(p=>`<div class="it"><span>${esc(p.desc)} · ${esc(fCorta(p.fecha))} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.occ}">Cargar</button><button type="button" data-hab-edit="${p.occ}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.occ}">Saltear</button></div>`).join("")}</div>`:""}
   <div class="balance"><span>Pagos fijos por mes (aprox.)</span><b class="num">${esc(fmt(tot))}</b></div>
   ${G.map(x=>`<div class="card" style="padding-block:6px"><div class="h" style="display:flex;justify-content:space-between;align-items:baseline;padding-top:8px"><h3>${esc(x.g)}</h3><span class="small num">${esc(fmt(x.total))}/mes</span></div>
    ${x.xs.map(o=>`<button type="button" class="cat" ${o.habe?`data-habe="${o.habe}"`:`data-sube="${esc(o.sube)}"`}>${ico(o.rubro)}<span class="n">${esc(o.nombre)}<br><small class="muted">${esc(o.cuando)}</small></span><span class="m">${esc(fmt(o.monto,o.moneda))}</span></button>`).join("")}</div>`).join("")}
@@ -799,7 +832,7 @@ function vPagos(){const pend=pendientes();const G=pagosAgrupados();const tot=G.r
    <button type="button" data-go="subs"><span>Administrar suscripciones y débitos</span><small>${subsItems().filter(s=>s.estado!=="cancelada").length} activos</small></button>
    <button type="button" data-go="habituales"><span>Administrar pagos habituales</span><small>${S.hab.items.filter(h=>h.activo).length} activos</small></button>
   </div>
-  <p class="small muted" style="margin:0">Junta las suscripciones y los pagos habituales. Los semanales cuentan ×4,33; los anuales, ÷12; los en dólares, al dólar de la proyección.</p>`}
+  <p class="small muted" style="margin:0">Lista de consulta: no hay avisos. Junta las suscripciones y los pagos habituales. Los semanales cuentan ×4,33; los anuales, ÷12; los en dólares, al dólar de la proyección.</p>`}
 // ================= Actividad =================
 // Se arma con las marcas que ya tiene cada movimiento (creado, actualizado, borrado, eliminado), así se ve igual en todos los dispositivos.
 function vActividad(){const hoy=hoyISO(),m0=mesDe(hoy);needMeses([m0,addMes(m0,-1),addMes(m0,-2)]);
@@ -822,9 +855,9 @@ function vActividad(){const hoy=hoyISO(),m0=mesDe(hoy);needMeses([m0,addMes(m0,-
 function vHabituales(){const pend=pendientes(),prox=proximos();const act=S.hab.items.filter(h=>h.activo),inac=S.hab.items.filter(h=>!h.activo);
   const fila=h=>`<button type="button" class="cat" data-habe="${h.id}">${ico(h.rubro)}<span class="n">${esc(h.desc)}<br><small class="muted">${esc(cuandoHab(h))} · ${esc(h.cuenta)}</small></span><span class="m">${esc(fmt(h.monto))}</span></button>`;
   return `<header class="top"><button type="button" class="back" data-back aria-label="Volver">←</button><h2 style="flex:1">Pagos habituales</h2></header>
-  <p class="small muted" style="margin:0">Cuando llega el día, aparecen en Inicio y en Pagos para que los confirmes. Nada se carga solo. Si ya lo cargaste a mano (mismo rubro y nombre parecido), la app lo reconoce y no te avisa.</p>
-  ${pend.length?`<div class="pend"><b class="small">Para confirmar</b>${pend.map(p=>`<div class="it"><span>${esc(p.desc)} · ${esc(fCorta(p.fecha))} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.occ}">Cargar</button><button type="button" data-hab-edit="${p.occ}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.occ}">Saltear</button></div>`).join("")}</div>`:""}
-  ${prox.length?`<div class="card"><h3>Próximos este mes</h3><div class="small">${prox.map(h=>`${esc(h.desc)} (${esc(fCorta(h.fecha))})`).join(" · ")}</div></div>`:""}
+  <p class="small muted" style="margin:0">Lista de referencia: la app no avisa ni carga nada. Los que se pagan con la Visa BBVA los carga Claude al conciliar el resumen; el resto lo cargás vos cuando pagás. Podés agregar, editar o desactivar pagos.</p>
+  ${false&&pend.length?`<div class="pend"><b class="small">Para confirmar</b>${pend.map(p=>`<div class="it"><span>${esc(p.desc)} · ${esc(fCorta(p.fecha))} · ${esc(fmt(p.monto))}</span><button type="button" data-hab-ok="${p.occ}">Cargar</button><button type="button" data-hab-edit="${p.occ}">Revisar</button><button type="button" class="ghost" data-hab-skip="${p.occ}">Saltear</button></div>`).join("")}</div>`:""}
+  ${false&&prox.length?`<div class="card"><h3>Próximos este mes</h3><div class="small">${prox.map(h=>`${esc(h.desc)} (${esc(fCorta(h.fecha))})`).join(" · ")}</div></div>`:""}
   <div class="card" style="padding-block:6px">${act.length?act.sort((a,b)=>a.dia-b.dia).map(fila).join(""):`<div class="state">No hay pagos habituales.</div>`}</div>
   <button type="button" data-go="habEdit" data-nuevo="1">+ Nuevo pago habitual</button>
   ${inac.length?`<div class="card" style="padding-block:6px"><h3 style="padding-top:8px">Desactivados</h3>${inac.map(fila).join("")}</div>`:""}`}
@@ -966,10 +999,10 @@ function render(full){if(!S.ready)return;
   const a=document.activeElement;if(!full&&a&&a.id&&/^(i|c|t|a|h|p|s)[A-Z]/.test(a.id)&&a.tagName!=="BUTTON")return;
   if(scr().name==="cargar"&&!full)leerForm();
   S._sl=null;const s=scr();
-  const V={inicio:vInicio,cuentas:vCuentas,topes:vTopes,mas:vMas,cargar:vCargar,lista:vLista,cuenta:vCuenta,cuentaEdit:vCuentaEdit,transfer:vTransfer,ajuste:vAjuste,habituales:vHabituales,habEdit:vHabEdit,ajustes:vAjustes,pagos:vPagos,actividad:vActividad,movSimple:vMovSimple,papelera:vPapelera,papelItem:vPapelItem,subs:vSubs,subEdit:vSubEdit,sync:vSync};
+  const V={tope:vTope,inicio:vInicio,cuentas:vCuentas,topes:vTopes,mas:vMas,cargar:vCargar,lista:vLista,cuenta:vCuenta,cuentaEdit:vCuentaEdit,transfer:vTransfer,ajuste:vAjuste,habituales:vHabituales,habEdit:vHabEdit,ajustes:vAjustes,pagos:vPagos,actividad:vActividad,movSimple:vMovSimple,papelera:vPapelera,papelItem:vPapelItem,subs:vSubs,subEdit:vSubEdit,sync:vSync};
   $("#view").innerHTML=(V[s.name]||vInicio)(s);
   $("#fab").hidden=!["inicio","cuentas","topes","pagos"].includes(s.name);
-  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===S.tab?"page":"false"));navSync()}
+  document.querySelectorAll("nav.tabs button").forEach(b=>{b.setAttribute("aria-current",b.dataset.tab===S.tab?"page":"false");if(b.dataset.tab==="pagos")b.hidden=YO()!=="Mati"});navSync()}
 function abrirCargar(form,editing){S.form=form||nuevoForm();S.editing=editing||null;S.calc=false;S.showAllRub=false;S.otraFecha=false;S.pickCuenta=false;S.confirmArch=false;S.confirmBorrar=false;go("cargar")}
 
 // ================= eventos =================
@@ -980,7 +1013,7 @@ function calcKey(k){leerForm();const f=S.form;let v=f.monto||"";
   else v+=({"−":"-"})[k]||k;f.monto=v;render(true)}
 $("#view").addEventListener("click",async e=>{const t=e.target.closest("button");if(!t)return;const d=t.dataset;const f=S.form;
   if("back" in d)return back();
-  if(d.go){const p={};if(d.transf)p.transf=1;if(d.c)p.c=d.c;if(d.nueva)p.nueva=1;if(d.nuevo)p.nuevo=1;if(d.mesact){S.home.per="mes";S.home.ref=hoyISO();ensureSubs()}
+  if(d.go){const p={};if(d.k)p.k=d.k;if(d.transf)p.transf=1;if(d.c)p.c=d.c;if(d.nueva)p.nueva=1;if(d.nuevo)p.nuevo=1;if(d.mesact){S.home.per="mes";S.home.ref=hoyISO();ensureSubs()}
     if(d.go==="cuentaEdit")S.ce=null;if(d.go==="transfer")S.tf=null;if(d.go==="habEdit")S.he=null;if(d.go==="subEdit")S.se=null;return go(d.go,p)}
   if(d.htipo){S.home.tipo=d.htipo;return render(true)}
   if(d.cal){S.home.per="dia";S.home.ref=d.cal;S.calMes=null;ensureSubs();return render(true)}
@@ -994,6 +1027,8 @@ $("#view").addEventListener("click",async e=>{const t=e.target.closest("button")
   if(d.cuenta)return go("cuenta",{cuenta:d.cuenta});
   if(d.cuentaedit){S.ce=null;return go("cuentaEdit",{cuenta:d.cuentaedit})}
   if(d.habe){S.he=null;return go("habEdit",{id:d.habe})}
+  if(d.act==="topePasar"){const v=(document.getElementById("iTope")||{}).value;if(!v)return toast("Elegí a qué tope pasarlo.");return cambiarTope(v)}
+  if(d.act==="topeVolver")return cambiarTope(null);
   if(d.edit){const[m,id]=d.edit.split("|");const x=movsDe(m).find(y=>y.id===id);if(!x)return;
     if(x.tipo==="transferencia"||x.tipo==="ajuste"){S.editing=x;return go("movSimple")}
     return abrirCargar(formDesdeMov(x),x)}
